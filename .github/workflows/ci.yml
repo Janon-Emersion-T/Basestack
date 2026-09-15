@@ -28,11 +28,23 @@ jobs:
           cd "$RUNNER_TEMP"
           ./basestack init smoke-app
           cd smoke-app
-          ../basestack add features
-          ../basestack add pricing
-          ../basestack add contact
+          ../basestack page add about
+          ../basestack page add contact
+          ../basestack add navbar --page about --variant centered
+          ../basestack add hero --page about --variant split
+          ../basestack add features --variant cards
+          ../basestack add pricing --variant simple
+          ../basestack add contact --page contact --variant centered
+          ../basestack add footer --variant columns
+          ../basestack theme set modern
+          ../basestack theme set minimal
+          ../basestack theme set default
+          ../basestack page list
+          ../basestack templates hero
           ../basestack check
           npm install --no-fund --no-audit
+          npm test
+          npm run typecheck
           ../basestack build
           test -f dist/index.html
       - uses: actions/upload-artifact@v4

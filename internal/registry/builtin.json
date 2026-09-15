@@ -1,0 +1,337 @@
+{
+  "components": [
+    {
+      "type": "navbar",
+      "variants": [
+        "default",
+        "centered"
+      ],
+      "defaultVariant": "default",
+      "props": {
+        "type": "object",
+        "fields": {
+          "title": {
+            "type": "string",
+            "required": true,
+            "nonEmpty": true
+          },
+          "subtitle": {
+            "type": "string",
+            "required": true
+          },
+          "links": {
+            "type": "array",
+            "required": true,
+            "items": {
+              "type": "object",
+              "required": true,
+              "fields": {
+                "label": {
+                  "type": "string",
+                  "required": true,
+                  "nonEmpty": true
+                },
+                "href": {
+                  "type": "string",
+                  "required": true,
+                  "format": "link"
+                }
+              }
+            }
+          }
+        }
+      },
+      "defaultProps": {
+        "title": "Your brand",
+        "subtitle": "Built with BaseStack",
+        "links": []
+      }
+    },
+    {
+      "type": "hero",
+      "variants": [
+        "default",
+        "split"
+      ],
+      "defaultVariant": "default",
+      "props": {
+        "type": "object",
+        "fields": {
+          "title": {
+            "type": "string",
+            "required": true,
+            "nonEmpty": true
+          },
+          "subtitle": {
+            "type": "string",
+            "required": true
+          },
+          "primaryButton": {
+            "type": "object",
+            "required": false,
+            "fields": {
+              "label": {
+                "type": "string",
+                "required": true,
+                "nonEmpty": true
+              },
+              "href": {
+                "type": "string",
+                "required": true,
+                "format": "link"
+              }
+            }
+          }
+        }
+      },
+      "defaultProps": {
+        "title": "Your next idea starts here.",
+        "subtitle": "Create something useful. Assemble your page from ready-made sections.",
+        "primaryButton": {
+          "label": "Explore this page",
+          "href": "#content"
+        }
+      }
+    },
+    {
+      "type": "features",
+      "variants": [
+        "default",
+        "cards"
+      ],
+      "defaultVariant": "default",
+      "props": {
+        "type": "object",
+        "fields": {
+          "title": {
+            "type": "string",
+            "required": true,
+            "nonEmpty": true
+          },
+          "subtitle": {
+            "type": "string",
+            "required": true
+          },
+          "items": {
+            "type": "array",
+            "required": true,
+            "items": {
+              "type": "object",
+              "fields": {
+                "title": {
+                  "type": "string",
+                  "required": true,
+                  "nonEmpty": true
+                },
+                "text": {
+                  "type": "string",
+                  "required": true
+                }
+              }
+            }
+          }
+        }
+      },
+      "defaultProps": {
+        "title": "Everything starts with a solid foundation.",
+        "subtitle": "Reusable sections. Responsive layouts. Source code you control.",
+        "items": [
+          {
+            "title": "Start with a block",
+            "text": "Choose reusable sections."
+          },
+          {
+            "title": "Make it your own",
+            "text": "Edit content and layout."
+          },
+          {
+            "title": "Keep control",
+            "text": "Own your source code."
+          }
+        ]
+      }
+    },
+    {
+      "type": "pricing",
+      "variants": [
+        "default",
+        "simple"
+      ],
+      "defaultVariant": "default",
+      "props": {
+        "type": "object",
+        "fields": {
+          "title": {
+            "type": "string",
+            "required": true,
+            "nonEmpty": true
+          },
+          "subtitle": {
+            "type": "string",
+            "required": true
+          },
+          "plans": {
+            "type": "array",
+            "required": true,
+            "items": {
+              "type": "object",
+              "fields": {
+                "title": {
+                  "type": "string",
+                  "required": true,
+                  "nonEmpty": true
+                },
+                "price": {
+                  "type": "string",
+                  "required": true,
+                  "nonEmpty": true
+                },
+                "description": {
+                  "type": "string",
+                  "required": true
+                }
+              }
+            }
+          }
+        }
+      },
+      "defaultProps": {
+        "title": "A plan that grows with you.",
+        "subtitle": "Describe your offer and pricing here.",
+        "plans": [
+          {
+            "title": "Your service",
+            "price": "Contact for pricing",
+            "description": "Describe included services."
+          }
+        ]
+      }
+    },
+    {
+      "type": "contact",
+      "variants": [
+        "default",
+        "centered"
+      ],
+      "defaultVariant": "default",
+      "props": {
+        "type": "object",
+        "fields": {
+          "title": {
+            "type": "string",
+            "required": true,
+            "nonEmpty": true
+          },
+          "subtitle": {
+            "type": "string",
+            "required": true
+          },
+          "email": {
+            "type": "string",
+            "required": true,
+            "format": "email"
+          }
+        }
+      },
+      "defaultProps": {
+        "title": "Let\u2019s build something together.",
+        "subtitle": "Get in touch to discuss your project.",
+        "email": "hello@example.com"
+      }
+    },
+    {
+      "type": "footer",
+      "variants": [
+        "default",
+        "columns"
+      ],
+      "defaultVariant": "default",
+      "props": {
+        "type": "object",
+        "fields": {
+          "title": {
+            "type": "string",
+            "required": true,
+            "nonEmpty": true
+          },
+          "subtitle": {
+            "type": "string",
+            "required": true
+          },
+          "links": {
+            "type": "array",
+            "required": true,
+            "items": {
+              "type": "object",
+              "required": true,
+              "fields": {
+                "label": {
+                  "type": "string",
+                  "required": true,
+                  "nonEmpty": true
+                },
+                "href": {
+                  "type": "string",
+                  "required": true,
+                  "format": "link"
+                }
+              }
+            }
+          }
+        }
+      },
+      "defaultProps": {
+        "title": "Your brand",
+        "subtitle": "Crafted with care. Powered by BaseStack.",
+        "links": []
+      }
+    }
+  ],
+  "themes": [
+    {
+      "name": "default",
+      "tokens": {
+        "font": "system-ui, sans-serif",
+        "background": "#ffffff",
+        "foreground": "#0a1a2e",
+        "primary": "#d9f174",
+        "secondary": "#f5f7f8",
+        "muted": "#536174",
+        "border": "#dce3e7",
+        "radius": "10px",
+        "spacing": "80px",
+        "container": "1240px"
+      }
+    },
+    {
+      "name": "modern",
+      "tokens": {
+        "font": "system-ui, sans-serif",
+        "background": "#101827",
+        "foreground": "#f4f7ff",
+        "primary": "#a5b4fc",
+        "secondary": "#1e293b",
+        "muted": "#cbd5e1",
+        "border": "#475569",
+        "radius": "22px",
+        "spacing": "96px",
+        "container": "1200px"
+      }
+    },
+    {
+      "name": "minimal",
+      "tokens": {
+        "font": "Georgia, serif",
+        "background": "#faf9f6",
+        "foreground": "#242424",
+        "primary": "#e8dfc9",
+        "secondary": "#eeece6",
+        "muted": "#595650",
+        "border": "#c9c5bc",
+        "radius": "2px",
+        "spacing": "56px",
+        "container": "1000px"
+      }
+    }
+  ]
+}
