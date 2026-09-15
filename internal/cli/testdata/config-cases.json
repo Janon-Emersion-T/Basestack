@@ -1,0 +1,665 @@
+[
+  {
+    "name": "legacy project",
+    "valid": true,
+    "config": {
+      "schemaVersion": 1,
+      "name": "test-app",
+      "sections": [
+        {
+          "id": "hero",
+          "type": "hero",
+          "title": "Hello",
+          "text": ""
+        }
+      ]
+    }
+  },
+  {
+    "name": "empty sections",
+    "valid": true,
+    "config": {
+      "schemaVersion": 1,
+      "name": "test-app",
+      "sections": []
+    }
+  },
+  {
+    "name": "navbar alternate",
+    "valid": true,
+    "config": {
+      "schemaVersion": 1,
+      "name": "test-app",
+      "sections": [
+        {
+          "id": "hero",
+          "type": "navbar",
+          "title": "Hello",
+          "text": "",
+          "variant": "minimal"
+        }
+      ]
+    }
+  },
+  {
+    "name": "hero alternate",
+    "valid": true,
+    "config": {
+      "schemaVersion": 1,
+      "name": "test-app",
+      "sections": [
+        {
+          "id": "hero",
+          "type": "hero",
+          "title": "Hello",
+          "text": "",
+          "variant": "split"
+        }
+      ]
+    }
+  },
+  {
+    "name": "features alternate",
+    "valid": true,
+    "config": {
+      "schemaVersion": 1,
+      "name": "test-app",
+      "sections": [
+        {
+          "id": "hero",
+          "type": "features",
+          "title": "Hello",
+          "text": "",
+          "variant": "list"
+        }
+      ]
+    }
+  },
+  {
+    "name": "pricing alternate",
+    "valid": true,
+    "config": {
+      "schemaVersion": 1,
+      "name": "test-app",
+      "sections": [
+        {
+          "id": "hero",
+          "type": "pricing",
+          "title": "Hello",
+          "text": "",
+          "variant": "compact"
+        }
+      ]
+    }
+  },
+  {
+    "name": "contact alternate",
+    "valid": true,
+    "config": {
+      "schemaVersion": 1,
+      "name": "test-app",
+      "sections": [
+        {
+          "id": "hero",
+          "type": "contact",
+          "title": "Hello",
+          "text": "",
+          "variant": "centered"
+        }
+      ]
+    }
+  },
+  {
+    "name": "footer alternate",
+    "valid": true,
+    "config": {
+      "schemaVersion": 1,
+      "name": "test-app",
+      "sections": [
+        {
+          "id": "hero",
+          "type": "footer",
+          "title": "Hello",
+          "text": "",
+          "variant": "minimal"
+        }
+      ]
+    }
+  },
+  {
+    "name": "same ids on different pages",
+    "valid": true,
+    "config": {
+      "schemaVersion": 1,
+      "name": "test-app",
+      "sections": [
+        {
+          "id": "hero",
+          "type": "hero",
+          "title": "Hello",
+          "text": ""
+        }
+      ],
+      "pages": [
+        {
+          "slug": "about",
+          "title": "About",
+          "sections": [
+            {
+              "id": "hero",
+              "type": "hero",
+              "title": "Hello",
+              "text": ""
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "invalid root pages None",
+    "valid": false,
+    "config": {
+      "schemaVersion": 1,
+      "name": "test-app",
+      "sections": [
+        {
+          "id": "hero",
+          "type": "hero",
+          "title": "Hello",
+          "text": ""
+        }
+      ],
+      "pages": null
+    }
+  },
+  {
+    "name": "invalid root pages {}",
+    "valid": false,
+    "config": {
+      "schemaVersion": 1,
+      "name": "test-app",
+      "sections": [
+        {
+          "id": "hero",
+          "type": "hero",
+          "title": "Hello",
+          "text": ""
+        }
+      ],
+      "pages": {}
+    }
+  },
+  {
+    "name": "invalid root schemaVersion 2",
+    "valid": false,
+    "config": {
+      "schemaVersion": 2,
+      "name": "test-app",
+      "sections": [
+        {
+          "id": "hero",
+          "type": "hero",
+          "title": "Hello",
+          "text": ""
+        }
+      ]
+    }
+  },
+  {
+    "name": "invalid root name Bad Name",
+    "valid": false,
+    "config": {
+      "schemaVersion": 1,
+      "name": "Bad Name",
+      "sections": [
+        {
+          "id": "hero",
+          "type": "hero",
+          "title": "Hello",
+          "text": ""
+        }
+      ]
+    }
+  },
+  {
+    "name": "invalid root sections None",
+    "valid": false,
+    "config": {
+      "schemaVersion": 1,
+      "name": "test-app",
+      "sections": null
+    }
+  },
+  {
+    "name": "invalid root unknown True",
+    "valid": false,
+    "config": {
+      "schemaVersion": 1,
+      "name": "test-app",
+      "sections": [
+        {
+          "id": "hero",
+          "type": "hero",
+          "title": "Hello",
+          "text": ""
+        }
+      ],
+      "unknown": true
+    }
+  },
+  {
+    "name": "invalid section variant None",
+    "valid": false,
+    "config": {
+      "schemaVersion": 1,
+      "name": "test-app",
+      "sections": [
+        {
+          "id": "hero",
+          "type": "hero",
+          "title": "Hello",
+          "text": "",
+          "variant": null
+        }
+      ]
+    }
+  },
+  {
+    "name": "invalid section variant ",
+    "valid": false,
+    "config": {
+      "schemaVersion": 1,
+      "name": "test-app",
+      "sections": [
+        {
+          "id": "hero",
+          "type": "hero",
+          "title": "Hello",
+          "text": "",
+          "variant": ""
+        }
+      ]
+    }
+  },
+  {
+    "name": "invalid section variant list",
+    "valid": false,
+    "config": {
+      "schemaVersion": 1,
+      "name": "test-app",
+      "sections": [
+        {
+          "id": "hero",
+          "type": "hero",
+          "title": "Hello",
+          "text": "",
+          "variant": "list"
+        }
+      ]
+    }
+  },
+  {
+    "name": "invalid section variant 1",
+    "valid": false,
+    "config": {
+      "schemaVersion": 1,
+      "name": "test-app",
+      "sections": [
+        {
+          "id": "hero",
+          "type": "hero",
+          "title": "Hello",
+          "text": "",
+          "variant": 1
+        }
+      ]
+    }
+  },
+  {
+    "name": "invalid section type constructor",
+    "valid": false,
+    "config": {
+      "schemaVersion": 1,
+      "name": "test-app",
+      "sections": [
+        {
+          "id": "hero",
+          "type": "constructor",
+          "title": "Hello",
+          "text": ""
+        }
+      ]
+    }
+  },
+  {
+    "name": "invalid section type __proto__",
+    "valid": false,
+    "config": {
+      "schemaVersion": 1,
+      "name": "test-app",
+      "sections": [
+        {
+          "id": "hero",
+          "type": "__proto__",
+          "title": "Hello",
+          "text": ""
+        }
+      ]
+    }
+  },
+  {
+    "name": "invalid section id ../x",
+    "valid": false,
+    "config": {
+      "schemaVersion": 1,
+      "name": "test-app",
+      "sections": [
+        {
+          "id": "../x",
+          "type": "hero",
+          "title": "Hello",
+          "text": ""
+        }
+      ]
+    }
+  },
+  {
+    "name": "invalid section title  ",
+    "valid": false,
+    "config": {
+      "schemaVersion": 1,
+      "name": "test-app",
+      "sections": [
+        {
+          "id": "hero",
+          "type": "hero",
+          "title": " ",
+          "text": ""
+        }
+      ]
+    }
+  },
+  {
+    "name": "invalid section text None",
+    "valid": false,
+    "config": {
+      "schemaVersion": 1,
+      "name": "test-app",
+      "sections": [
+        {
+          "id": "hero",
+          "type": "hero",
+          "title": "Hello",
+          "text": null
+        }
+      ]
+    }
+  },
+  {
+    "name": "invalid section oops True",
+    "valid": false,
+    "config": {
+      "schemaVersion": 1,
+      "name": "test-app",
+      "sections": [
+        {
+          "id": "hero",
+          "type": "hero",
+          "title": "Hello",
+          "text": "",
+          "oops": true
+        }
+      ]
+    }
+  },
+  {
+    "name": "missing section id",
+    "valid": false,
+    "config": {
+      "schemaVersion": 1,
+      "name": "test-app",
+      "sections": [
+        {
+          "type": "hero",
+          "title": "Hello",
+          "text": ""
+        }
+      ]
+    }
+  },
+  {
+    "name": "missing section type",
+    "valid": false,
+    "config": {
+      "schemaVersion": 1,
+      "name": "test-app",
+      "sections": [
+        {
+          "id": "hero",
+          "title": "Hello",
+          "text": ""
+        }
+      ]
+    }
+  },
+  {
+    "name": "missing section title",
+    "valid": false,
+    "config": {
+      "schemaVersion": 1,
+      "name": "test-app",
+      "sections": [
+        {
+          "id": "hero",
+          "type": "hero",
+          "text": ""
+        }
+      ]
+    }
+  },
+  {
+    "name": "missing section text",
+    "valid": false,
+    "config": {
+      "schemaVersion": 1,
+      "name": "test-app",
+      "sections": [
+        {
+          "id": "hero",
+          "type": "hero",
+          "title": "Hello"
+        }
+      ]
+    }
+  },
+  {
+    "name": "duplicate section ids",
+    "valid": false,
+    "config": {
+      "schemaVersion": 1,
+      "name": "test-app",
+      "sections": [
+        {
+          "id": "hero",
+          "type": "hero",
+          "title": "Hello",
+          "text": ""
+        },
+        {
+          "id": "hero",
+          "type": "hero",
+          "title": "Hello",
+          "text": ""
+        }
+      ]
+    }
+  },
+  {
+    "name": "invalid page slug home",
+    "valid": false,
+    "config": {
+      "schemaVersion": 1,
+      "name": "test-app",
+      "sections": [
+        {
+          "id": "hero",
+          "type": "hero",
+          "title": "Hello",
+          "text": ""
+        }
+      ],
+      "pages": [
+        {
+          "slug": "home",
+          "title": "About",
+          "sections": []
+        }
+      ]
+    }
+  },
+  {
+    "name": "invalid page slug About",
+    "valid": false,
+    "config": {
+      "schemaVersion": 1,
+      "name": "test-app",
+      "sections": [
+        {
+          "id": "hero",
+          "type": "hero",
+          "title": "Hello",
+          "text": ""
+        }
+      ],
+      "pages": [
+        {
+          "slug": "About",
+          "title": "About",
+          "sections": []
+        }
+      ]
+    }
+  },
+  {
+    "name": "invalid page slug a/b",
+    "valid": false,
+    "config": {
+      "schemaVersion": 1,
+      "name": "test-app",
+      "sections": [
+        {
+          "id": "hero",
+          "type": "hero",
+          "title": "Hello",
+          "text": ""
+        }
+      ],
+      "pages": [
+        {
+          "slug": "a/b",
+          "title": "About",
+          "sections": []
+        }
+      ]
+    }
+  },
+  {
+    "name": "invalid page title ",
+    "valid": false,
+    "config": {
+      "schemaVersion": 1,
+      "name": "test-app",
+      "sections": [
+        {
+          "id": "hero",
+          "type": "hero",
+          "title": "Hello",
+          "text": ""
+        }
+      ],
+      "pages": [
+        {
+          "slug": "about",
+          "title": "",
+          "sections": []
+        }
+      ]
+    }
+  },
+  {
+    "name": "invalid page sections None",
+    "valid": false,
+    "config": {
+      "schemaVersion": 1,
+      "name": "test-app",
+      "sections": [
+        {
+          "id": "hero",
+          "type": "hero",
+          "title": "Hello",
+          "text": ""
+        }
+      ],
+      "pages": [
+        {
+          "slug": "about",
+          "title": "About",
+          "sections": null
+        }
+      ]
+    }
+  },
+  {
+    "name": "invalid page unknown True",
+    "valid": false,
+    "config": {
+      "schemaVersion": 1,
+      "name": "test-app",
+      "sections": [
+        {
+          "id": "hero",
+          "type": "hero",
+          "title": "Hello",
+          "text": ""
+        }
+      ],
+      "pages": [
+        {
+          "slug": "about",
+          "title": "About",
+          "sections": [],
+          "unknown": true
+        }
+      ]
+    }
+  },
+  {
+    "name": "duplicate page slugs",
+    "valid": false,
+    "config": {
+      "schemaVersion": 1,
+      "name": "test-app",
+      "sections": [
+        {
+          "id": "hero",
+          "type": "hero",
+          "title": "Hello",
+          "text": ""
+        }
+      ],
+      "pages": [
+        {
+          "slug": "about",
+          "title": "About",
+          "sections": []
+        },
+        {
+          "slug": "about",
+          "title": "About",
+          "sections": []
+        }
+      ]
+    }
+  }
+]

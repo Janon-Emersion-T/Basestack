@@ -6,3 +6,5 @@ node_modules/
 !.env.example
 *.test
 coverage.out
+/tests/web/test-results/
+/tests/web/playwright-report/

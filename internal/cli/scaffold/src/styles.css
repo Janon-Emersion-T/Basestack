@@ -47,3 +47,29 @@ p { line-height: 1.7; color: var(--muted); }
 .skip-link:focus { top: 15px; }
 @media (max-width: 640px) { .navbar { align-items: flex-start; flex-direction: column; padding-top: 22px; padding-bottom: 22px; } .nav-links { gap: 18px; } .section { padding-top: 52px; padding-bottom: 52px; } .cards { grid-template-columns: 1fr; } .composition { gap: 8px; margin-top: 40px; } .composition-card { padding: 14px; } .composition-card span { font-size: .9rem; } .footer { align-items: flex-start; flex-direction: column; } }
 @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } .button { transition: none; } }
+
+/* Alternate layouts share the same content and accessible markup. */
+.nav-links a[aria-current="page"] { text-decoration: underline; text-decoration-thickness: 2px; }
+.navbar.variant-minimal { min-height: 70px; background: #f5f7f8; }
+.navbar.variant-minimal .brand-mark { background: transparent; color: var(--ink); border: 1px solid var(--line); }
+.hero.variant-split { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); align-items: center; gap: 48px; }
+.hero.variant-split h1 { font-size: clamp(2.8rem, 5vw, 4.6rem); }
+.hero.variant-split .composition { grid-template-columns: 1fr; margin-top: 0; border-top: 0; padding: 24px; background: var(--ink); border-radius: 16px; }
+.hero.variant-split .composition-card { display: flex; align-items: center; gap: 22px; }
+.hero.variant-split .composition-card span { margin-top: 0; }
+.features.variant-list .cards { grid-template-columns: 1fr; gap: 0; }
+.features.variant-list .card { border: 0; border-bottom: 1px solid var(--line); border-radius: 0; display: grid; grid-template-columns: 40px minmax(0, 1fr) minmax(0, 1.4fr); align-items: baseline; gap: 24px; padding: 24px 0; }
+.features.variant-list .card h3, .features.variant-list .card p { margin: 0; }
+.pricing.variant-compact { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 48px; }
+.pricing.variant-compact > .eyebrow, .pricing.variant-compact > h2, .pricing.variant-compact > .lead { grid-column: 1; }
+.pricing.variant-compact .price-card { grid-column: 2; grid-row: 1 / 4; align-self: center; }
+.contact.variant-centered { text-align: center; }
+.contact.variant-centered h2, .contact.variant-centered .lead { margin-left: auto; margin-right: auto; }
+.footer.variant-minimal { padding-top: 22px; padding-bottom: 22px; background: #f5f7f8; }
+.footer.variant-minimal strong { font-size: 1rem; }
+@media (max-width: 760px) {
+  .hero.variant-split, .pricing.variant-compact { grid-template-columns: 1fr; gap: 24px; }
+  .pricing.variant-compact .price-card { grid-column: 1; grid-row: auto; }
+  .features.variant-list .card { grid-template-columns: 30px minmax(0, 1fr); gap: 12px; }
+  .features.variant-list .card p { grid-column: 2; }
+}

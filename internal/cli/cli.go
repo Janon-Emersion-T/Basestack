@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"bytes"
 	"embed"
 	"encoding/json"
 	"errors"
@@ -18,39 +17,11 @@ import (
 //go:embed scaffold/* scaffold/src/*
 var scaffold embed.FS
 
-const Version = "0.1.0"
+const Version = "0.2.0"
 const configFile = "basestack.json"
 
 var namePattern = regexp.MustCompile(`^[a-z][a-z0-9-]{0,49}$`)
 var kinds = []string{"navbar", "hero", "features", "pricing", "contact", "footer"}
-
-type Section struct {
-	ID string `json:"id"`
-	Type string `json:"type"`
-	Title string `json:"title"`
-	Text string `json:"text"`
-}
-
-func (s *Section) UnmarshalJSON(data []byte) error {
-	var raw struct {
-		ID *string `json:"id"`
-		Type *string `json:"type"`
-		Title *string `json:"title"`
-		Text *string `json:"text"`
-	}
-	d := json.NewDecoder(bytes.NewReader(data))
-	d.DisallowUnknownFields()
-	if err := d.Decode(&raw); err != nil { return err }
-	if raw.ID == nil || raw.Type == nil || raw.Title == nil || raw.Text == nil { return errors.New("each section requires string id, type, title and text fields") }
-	*s = Section{ID:*raw.ID, Type:*raw.Type, Title:*raw.Title, Text:*raw.Text}
-	return nil
-}
-
-type Config struct {
-	SchemaVersion int `json:"schemaVersion"`
-	Name string `json:"name"`
-	Sections []Section `json:"sections"`
-}
 
 func known(kind string) bool {
 	for _, k := range kinds { if k == kind { return true } }
@@ -68,20 +39,6 @@ func defaults(kind, id string) Section {
 	}
 	v := copy[kind]
 	return Section{ID:id, Type:kind, Title:v[0], Text:v[1]}
-}
-
-func validate(c Config) error {
-	if c.SchemaVersion != 1 { return errors.New("unsupported schemaVersion; expected 1") }
-	if !namePattern.MatchString(c.Name) { return errors.New("name must start with a lowercase letter and contain only lowercase letters, digits or hyphens (max 50 characters)") }
-	if c.Sections == nil { return errors.New("sections must be an array") }
-	seen := map[string]bool{}
-	for _, s := range c.Sections {
-		if !known(s.Type) { return fmt.Errorf("unknown section type %q", s.Type) }
-		if !namePattern.MatchString(s.ID) || seen[s.ID] { return fmt.Errorf("invalid or duplicate section id %q", s.ID) }
-		seen[s.ID] = true
-		if strings.TrimSpace(s.Title) == "" { return fmt.Errorf("section %q needs a title", s.ID) }
-	}
-	return nil
 }
 
 func readConfig() (Config, error) {
@@ -139,37 +96,37 @@ func Run(args []string, out io.Writer) error {
 	if len(args) == 0 { args = []string{"help"} }
 	switch args[0] {
 	case "help", "--help", "-h":
-		fmt.Fprintln(out, "BaseStack — build from reusable sections, without AI.\n\nCommands:\n  init <name>       Create a React + TypeScript project\n  templates         List built-in sections\n  add <type>        Insert a section before the footer\n  remove <id>       Remove a section\n  check             Validate basestack.json\n  dev               Start the local Vite server\n  build             Validate and build for production\n  version           Print CLI version\n\nRun add/remove/check/dev/build inside a generated project.\nInstall frontend dependencies with npm install before dev/build.")
+		fmt.Fprintln(out, `BaseStack — build from reusable sections, without AI.
+
+Commands:
+  init <name>                         Create a React + TypeScript project
+  templates                           List section types and variants
+  add <type> [--page slug] [--variant name]
+  remove <id> [--page slug]            Remove a section
+  page list                           List pages
+  page add <slug> [--title "About us"] Create a page
+  page remove <slug>                  Remove a page (except home)
+  check                               Validate basestack.json
+  dev                                 Start the local Vite server
+  build                               Validate and build for production
+  version                             Print CLI version
+
+Run page/add/remove/check/dev/build inside a generated project.
+Section commands target home unless --page is specified.
+Install frontend dependencies with npm install before dev/build.`)
 		return nil
 	case "version", "--version":
 		fmt.Fprintln(out, Version); return nil
 	case "templates":
-		for _, k := range kinds { fmt.Fprintln(out, k) }; return nil
+		for _, k := range kinds { fmt.Fprintf(out, "%s: default, %s\n", k, variants[k]) }; return nil
 	case "init":
 		if len(args) != 2 { return errors.New("usage: basestack init <name>") }
 		if err := initProject(args[1]); err != nil { return err }
 		fmt.Fprintf(out, "Created %s.\n\nNext:\n  cd %s\n  npm install\n  basestack dev\n\nEdit basestack.json to customise content and order.\n", args[1], args[1]); return nil
+	case "page":
+		return pageCommand(args[1:], out)
 	case "add", "remove":
-		if len(args) != 2 { return fmt.Errorf("usage: basestack %s <%s>", args[0], map[string]string{"add":"type", "remove":"id"}[args[0]]) }
-		c, err := readConfig(); if err != nil { return err }
-		if args[0] == "add" {
-			kind := args[1]; if !known(kind) { return fmt.Errorf("unknown template %q; run basestack templates", kind) }
-			used := map[string]bool{}; for _, s := range c.Sections { used[s.ID] = true }
-			id := kind; for n := 2; used[id]; n++ { id = fmt.Sprintf("%s-%d", kind, n) }
-			s := defaults(kind, id)
-			pos := len(c.Sections)
-			if kind != "footer" { for i, existing := range c.Sections { if existing.Type == "footer" { pos = i; break } } }
-			c.Sections = append(c.Sections, Section{})
-			copy(c.Sections[pos+1:], c.Sections[pos:])
-			c.Sections[pos] = s
-			if err := writeConfig(c); err != nil { return err }; fmt.Fprintln(out, "Added", id)
-		} else {
-			found := false
-			for i, s := range c.Sections { if s.ID == args[1] { c.Sections = append(c.Sections[:i], c.Sections[i+1:]...); found = true; break } }
-			if !found { return fmt.Errorf("section %q not found", args[1]) }
-			if err := writeConfig(c); err != nil { return err }; fmt.Fprintln(out, "Removed", args[1])
-		}
-		return nil
+		return sectionCommand(args, out)
 	case "check", "dev", "build":
 		if len(args) != 1 { return fmt.Errorf("usage: basestack %s", args[0]) }
 		if _, err := readConfig(); err != nil { return err }

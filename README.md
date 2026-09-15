@@ -4,17 +4,18 @@
 
 BaseStack is an application-building toolkit for customers and developers: choose templates, assemble sections and customise the result. The long-term goal is a shared foundation for a simple CLI and a visual drag-and-drop Studio.
 
-## Version 1, milestone 1 — CLI foundation (0.1.0)
+## Version 1, milestone 2 — pages and variants (0.2.0)
 
-This first implementation generates a standalone React + TypeScript website. It includes a Go CLI, six reusable section templates, editable JSON configuration, responsive styling, validation and GitHub Actions checks. It is the foundation of V1, not the complete application platform.
+BaseStack generates a standalone React + TypeScript website. It includes a Go CLI, multiple pages, six section types with two layouts each, editable JSON configuration, responsive styling, validation and GitHub Actions checks. It is the foundation of V1, not the complete application platform.
 
 | Available now | Planned next |
 | --- | --- |
 | Project creation and independent source code | Multiple pages and template variants |
-| Navbar, hero, features, pricing, contact, footer | Dashboard, commerce and auth templates |
-| Add/remove sections and edit their order/content | Visual Studio with drag-and-drop |
+| Navbar, hero, features, pricing, contact, footer, each with an alternate layout | Dashboard, commerce and auth templates |
+| Multiple pages with navigation and page-specific sections | Visual Studio with drag-and-drop |
+| Add/remove sections and edit their order/content | Rich content properties and theme tokens |
 | Local preview and production build commands | Go services, PostgreSQL, auth and RBAC |
-| Configuration validation and automated checks | Storage, realtime and deployment adapters |
+| CLI/frontend validation parity and desktop/mobile browser checks | Storage, realtime and deployment adapters |
 
 No account, AI subscription, BaseStack cloud service or payment is required. `login` and `balance` are intentionally not implemented until there is a real account/billing service.
 
@@ -31,11 +32,13 @@ cd my-app
 ../bin/basestack add features
 ../bin/basestack add pricing
 ../bin/basestack add contact
+../bin/basestack page add about --title "About us"
+../bin/basestack add features --page about --variant list
 npm install
 ../bin/basestack dev
 ```
 
-Open the URL printed by Vite. Edit `basestack.json` and save to see changes. The generated app starts with navbar, hero and footer; new sections are inserted before the first footer.
+Open the URL printed by Vite. Use the navbar to visit About us, or open `?page=about`. Edit `basestack.json` and save to see changes. Home and new pages start with navbar, hero and footer. New content is inserted before the first footer; new navbars go at the beginning.
 
 For a globally available CLI, run `go install ./cmd/basestack` from this repository and add your Go bin directory to PATH.
 
@@ -43,11 +46,18 @@ For a globally available CLI, run `go install ./cmd/basestack` from this reposit
 basestack templates
 basestack add features
 basestack remove features
+basestack page list
+basestack add hero --page about --variant split
+basestack remove hero-2 --page about
 basestack check
 basestack build
 ```
 
 The generated project also works with `npm run dev` and `npm run build` without the CLI. Build output is in `dist/`. Replace sample content and contact email before publishing. The pricing section is presentational; no checkout or backend form service is included.
+
+Pages use query URLs (`?page=about`) with full-page navigation, so static hosts do not need custom rewrite rules. These are client-rendered views of one built HTML entry, not separate prerendered HTML documents. Page titles update in the browser; server-rendered metadata and clean-path routes are future work.
+
+**Compatibility:** 0.1.0 single-page manifests remain valid. Updating the CLI does not overwrite generated source files. To add pages/variants to an older generated app, follow the [upgrade guide](docs/UPGRADING.md).
 
 ## Work directly on GitHub
 

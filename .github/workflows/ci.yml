@@ -31,10 +31,42 @@ jobs:
           ../basestack add features
           ../basestack add pricing
           ../basestack add contact
+          ../basestack page add about --title "About us"
+          ../basestack add features --page about --variant list
+          ../basestack add pricing --page about --variant compact
+          ../basestack add contact --page about --variant centered
+          ../basestack page add empty
+          ../basestack remove navbar --page empty
+          ../basestack remove hero --page empty
+          ../basestack remove footer --page empty
+          node --input-type=module <<'JS'
+          import fs from 'node:fs';
+          const config = JSON.parse(fs.readFileSync('basestack.json', 'utf8'));
+          for (const section of config.pages[0].sections) {
+            if (section.type === 'navbar' || section.type === 'footer') section.variant = 'minimal';
+            if (section.type === 'hero') section.variant = 'split';
+          }
+          fs.writeFileSync('basestack.json', JSON.stringify(config, null, 2));
+          JS
           ../basestack check
           npm install --no-fund --no-audit
           ../basestack build
           test -f dist/index.html
+          ./node_modules/.bin/tsc src/config.ts --outDir .checks --module ES2022 --target ES2022 --moduleResolution bundler --skipLibCheck
+          node "$GITHUB_WORKSPACE/tests/check-config.mjs" "$RUNNER_TEMP/smoke-app/.checks/config.js"
+      - name: Browser integration tests (desktop and mobile)
+        working-directory: tests/web
+        env:
+          BASESTACK_APP_DIR: ${{ runner.temp }}/smoke-app
+        run: |
+          npm install --no-fund --no-audit
+          npx playwright install --with-deps chromium
+          npx playwright test
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: browser-failure-details
+          path: tests/web/test-results
       - uses: actions/upload-artifact@v4
         with:
           name: basestack-linux-amd64
