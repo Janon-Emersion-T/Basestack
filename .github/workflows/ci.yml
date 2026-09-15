@@ -1,0 +1,45 @@
+name: BaseStack CI
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23.x'
+          cache: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Format, vet and test CLI
+        run: |
+          gofmt -w cmd internal
+          go vet ./...
+          go test -race -cover ./...
+      - name: Build CLI and exercise generated app
+        run: |
+          go build -o "$RUNNER_TEMP/basestack" ./cmd/basestack
+          cd "$RUNNER_TEMP"
+          ./basestack init smoke-app
+          cd smoke-app
+          ../basestack add features
+          ../basestack add pricing
+          ../basestack add contact
+          ../basestack check
+          npm install --no-fund --no-audit
+          ../basestack build
+          test -f dist/index.html
+      - uses: actions/upload-artifact@v4
+        with:
+          name: basestack-linux-amd64
+          path: ${{ runner.temp }}/basestack
+      - uses: actions/upload-artifact@v4
+        with:
+          name: basestack-demo
+          path: ${{ runner.temp }}/smoke-app/dist
