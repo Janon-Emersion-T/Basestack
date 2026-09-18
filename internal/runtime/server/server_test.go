@@ -130,3 +130,29 @@ func TestAuthCORSRouting(t *testing.T) {
 		t.Fatal("disabled Auth exposed routes")
 	}
 }
+
+func TestApplicationCORSAndDisabledRoutes(t *testing.T) {
+	for _, path := range []string{"/api/functions/hello", "/api/storage/files", "/api/auth/me"} {
+		w := httptest.NewRecorder()
+		Handler(Options{}).ServeHTTP(w, httptest.NewRequest("GET", path, nil))
+		if w.Code != 404 {
+			t.Fatal("disabled route exposed")
+		}
+	}
+	noop := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(200) })
+	h := Handler(Options{Origins: []string{"http://localhost:5173"}, Functions: noop, Storage: noop, Auth: noop})
+	for _, tc := range []struct {
+		path, method, headers string
+		status                int
+	}{{"/api/functions/hello", "POST", "authorization, content-type", 204}, {"/api/storage/files", "DELETE", "authorization", 204}, {"/api/storage/files", "PATCH", "authorization", 403}, {"/api/auth/me", "GET", "authorization", 204}, {"/api/functions/hello", "POST", "x-user-id", 403}} {
+		r := httptest.NewRequest("OPTIONS", tc.path, nil)
+		r.Header.Set("Origin", "http://localhost:5173")
+		r.Header.Set("Access-Control-Request-Method", tc.method)
+		r.Header.Set("Access-Control-Request-Headers", tc.headers)
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, r)
+		if w.Code != tc.status {
+			t.Fatalf("preflight status %d want %d", w.Code, tc.status)
+		}
+	}
+}

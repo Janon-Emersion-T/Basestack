@@ -14,13 +14,15 @@ import (
 	"time"
 )
 
-const Version = "0.3.1"
+const Version = "0.3.2"
 
 type Pinger interface{ Ping(context.Context) error }
 type Options struct {
-	Auth     http.Handler
-	Origins  []string
-	Database Pinger
+	Auth      http.Handler
+	Functions http.Handler
+	Storage   http.Handler
+	Origins   []string
+	Database  Pinger
 }
 
 func writeJSON(w http.ResponseWriter, status int, value any) {
@@ -57,26 +59,57 @@ func Handler(options Options) http.Handler {
 			w.Header().Set("Access-Control-Allow-Origin", origin)
 		}
 		isAuth := options.Auth != nil && strings.HasPrefix(r.URL.Path, "/api/auth/")
-		if r.URL.Path != "/api/health" && !isAuth {
+		isFunction := options.Functions != nil && strings.HasPrefix(r.URL.Path, "/api/functions/")
+		isStorage := options.Storage != nil && strings.HasPrefix(r.URL.Path, "/api/storage/")
+		if r.URL.Path != "/api/health" && !isAuth && !isFunction && !isStorage {
 			failure(w, 404, "not_found", "Route not found")
 			return
 		}
 		expectedMethod := "GET"
-		if isAuth {
+		if isAuth || isFunction {
 			expectedMethod = "POST"
+		}
+		if isAuth && r.URL.Path == "/api/auth/me" {
+			expectedMethod = "GET"
+		}
+		if isStorage {
+			expectedMethod = r.Method
+			if r.Method == "OPTIONS" {
+				expectedMethod = r.Header.Get("Access-Control-Request-Method")
+			}
 		}
 		if r.Method == http.MethodOptions {
 			w.Header().Add("Vary", "Access-Control-Request-Method")
 			w.Header().Add("Vary", "Access-Control-Request-Headers")
-			if origin == "" || r.Header.Get("Access-Control-Request-Method") != expectedMethod || (r.Header.Get("Access-Control-Request-Headers") != "" && (!isAuth || strings.ToLower(strings.TrimSpace(r.Header.Get("Access-Control-Request-Headers"))) != "content-type")) {
+			validHeaders := true
+			for _, header := range strings.Split(r.Header.Get("Access-Control-Request-Headers"), ",") {
+				header = strings.ToLower(strings.TrimSpace(header))
+				if header != "" && (!(isAuth || isFunction || isStorage) || (header != "content-type" && header != "authorization")) {
+					validHeaders = false
+				}
+			}
+			validMethod := !isStorage || (expectedMethod == "GET" || expectedMethod == "POST" || expectedMethod == "DELETE")
+			if origin == "" || r.Header.Get("Access-Control-Request-Method") != expectedMethod || !validHeaders || !validMethod {
 				failure(w, 403, "preflight_denied", "Preflight is not allowed")
 				return
 			}
 			w.Header().Set("Access-Control-Allow-Methods", expectedMethod)
-			if isAuth {
-				w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+			if isAuth || isFunction || isStorage {
+				headers := "Content-Type"
+				if strings.Contains(strings.ToLower(r.Header.Get("Access-Control-Request-Headers")), "authorization") {
+					headers += ", Authorization"
+				}
+				w.Header().Set("Access-Control-Allow-Headers", headers)
 			}
 			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		if isFunction {
+			options.Functions.ServeHTTP(w, r)
+			return
+		}
+		if isStorage {
+			options.Storage.ServeHTTP(w, r)
 			return
 		}
 		if isAuth {

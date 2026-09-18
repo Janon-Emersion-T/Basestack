@@ -1,4 +1,4 @@
-// Package migrations manages transparent, ordered, forward-only SQL migrations.
+// Package migrations manages ordered SQL migrations and explicit, checksummed rollback.
 package migrations
 
 import (
@@ -15,10 +15,12 @@ import (
 const Directory = "basestack/migrations"
 
 type File struct {
-	Version  int64
-	Name     string
-	SQL      string
-	Checksum string
+	Version      int64
+	Name         string
+	SQL          string
+	Checksum     string
+	DownSQL      string
+	DownChecksum string
 }
 
 var filename = regexp.MustCompile(`^([0-9]{6})_([a-z][a-z0-9_]{0,63})\.sql$`)
@@ -39,6 +41,16 @@ func Discover(dir string) ([]File, error) {
 	result := []File{}
 	versions, names := map[int64]bool{}, map[string]bool{}
 	for _, entry := range entries {
+		if strings.HasSuffix(entry.Name(), ".down.sql") {
+			up := strings.TrimSuffix(entry.Name(), ".down.sql") + ".sql"
+			if !filename.MatchString(up) {
+				return nil, fmt.Errorf("invalid down migration filename")
+			}
+			if info, err := os.Lstat(filepath.Join(dir, up)); err != nil || !info.Mode().IsRegular() {
+				return nil, fmt.Errorf("orphan down migration")
+			}
+			continue
+		}
 		if !strings.HasSuffix(entry.Name(), ".sql") {
 			continue
 		}
@@ -64,7 +76,28 @@ func Discover(dir string) ([]File, error) {
 		if err := transactionFree(string(data)); err != nil {
 			return nil, fmt.Errorf("migration %s: %w", entry.Name(), err)
 		}
-		result = append(result, File{Version: version, Name: entry.Name(), SQL: string(data), Checksum: fmt.Sprintf("%x", sha256.Sum256(data))})
+		file := File{Version: version, Name: entry.Name(), SQL: string(data), Checksum: fmt.Sprintf("%x", sha256.Sum256(data))}
+		down := filepath.Join(dir, strings.TrimSuffix(entry.Name(), ".sql")+".down.sql")
+		if info, err := os.Lstat(down); err == nil {
+			if !info.Mode().IsRegular() {
+				return nil, fmt.Errorf("down migration must be a regular file")
+			}
+			data, err := os.ReadFile(down)
+			if err != nil {
+				return nil, err
+			}
+			if len(strings.TrimSpace(string(data))) == 0 {
+				return nil, fmt.Errorf("down migration must not be empty")
+			}
+			if err := transactionFree(string(data)); err != nil {
+				return nil, err
+			}
+			file.DownSQL = string(data)
+			file.DownChecksum = fmt.Sprintf("%x", sha256.Sum256(data))
+		} else if !os.IsNotExist(err) {
+			return nil, err
+		}
+		result = append(result, file)
 		versions[version] = true
 		names[parts[2]] = true
 	}

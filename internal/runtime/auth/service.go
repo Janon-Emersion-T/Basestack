@@ -22,7 +22,7 @@ type Service struct {
 }
 
 func NewService(repo *Repository, options Options, delivery Delivery) (*Service, error) {
-	if repo == nil || delivery == nil || (options.Environment != "development" && options.Environment != "production") || (options.Environment != "development" && delivery.DevelopmentOnly()) || options.VerificationTTL <= 0 || options.VerificationTTL > 24*time.Hour || options.ResetTTL <= 0 || options.ResetTTL > time.Hour {
+	if repo == nil || delivery == nil || (options.Environment != "development" && options.Environment != "production" && options.Environment != "test") || (options.Environment != "development" && delivery.DevelopmentOnly()) || options.VerificationTTL <= 0 || options.VerificationTTL > 24*time.Hour || options.ResetTTL <= 0 || options.ResetTTL > time.Hour {
 		return nil, ErrUnavailable
 	}
 	passwords, err := NewPasswords(options.Parameters)
@@ -76,13 +76,17 @@ func (s *Service) Signup(ctx context.Context, email, password string) (PublicUse
 	return u.Public(), nil
 }
 func (s *Service) Login(ctx context.Context, email, password string) (PublicUser, error) {
+	u, err := s.verifyCredentials(ctx, email, password)
+	return u.Public(), err
+}
+func (s *Service) verifyCredentials(ctx context.Context, email, password string) (User, error) {
 	_, normalized, err := NormalizeEmail(email)
 	if err != nil || len(password) > 1024 {
-		return PublicUser{}, ErrInvalidCredentials
+		return User{}, ErrInvalidCredentials
 	}
 	u, findErr := s.repo.FindByEmail(ctx, normalized)
 	if findErr != nil && !errors.Is(findErr, errNotFound) {
-		return PublicUser{}, findErr
+		return User{}, findErr
 	}
 	hash := s.dummy
 	if findErr == nil {
@@ -90,7 +94,7 @@ func (s *Service) Login(ctx context.Context, email, password string) (PublicUser
 	}
 	ok, rehash, err := s.passwords.Verify(ctx, password, hash)
 	if errors.Is(err, ErrBusy) || errors.Is(err, ErrUnavailable) {
-		return PublicUser{}, err
+		return User{}, err
 	}
 	if err != nil || !ok || findErr != nil || u.Status != "active" || (s.options.RequireVerification && u.EmailVerifiedAt == nil) {
 		id := ""
@@ -98,15 +102,15 @@ func (s *Service) Login(ctx context.Context, email, password string) (PublicUser
 			id = u.ID
 		}
 		if err := s.repo.Event(ctx, id, "login_failed"); err != nil {
-			return PublicUser{}, err
+			return User{}, err
 		}
-		return PublicUser{}, ErrInvalidCredentials
+		return User{}, ErrInvalidCredentials
 	}
 	newHash := ""
 	if rehash {
 		newHash, err = s.passwords.Hash(ctx, password)
 		if err != nil {
-			return PublicUser{}, err
+			return User{}, err
 		}
 	}
 	id := u.ID
@@ -115,9 +119,9 @@ func (s *Service) Login(ctx context.Context, email, password string) (PublicUser
 		if errors.Is(err, ErrInvalidCredentials) {
 			_ = s.repo.Event(ctx, id, "login_failed")
 		}
-		return PublicUser{}, err
+		return User{}, err
 	}
-	return u.Public(), nil
+	return u, nil
 }
 func (s *Service) RequestChallenge(ctx context.Context, email, purpose string) error {
 	_, normalized, err := NormalizeEmail(email)

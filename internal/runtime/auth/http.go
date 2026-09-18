@@ -169,3 +169,11 @@ func Handler(service *Service, limiter Limiter) http.Handler {
 		errorResponse(w, err)
 	})
 }
+
+func clientIP(r *http.Request) string {
+	ip, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return "unknown"
+	}
+	return ip
+}

@@ -1,84 +1,109 @@
-# Architecture and V1 roadmap
+# BaseStack architecture
 
-## Product principle
+BaseStack is an independent application platform. Composition and application
+services share inspectable, versioned files. Generated source, SQL and data belong
+to the application owner. No hosted BaseStack service, BaaS or AI is required.
 
-Customers and developers should assemble applications without requiring AI. The CLI and future Studio use the same inspectable versioned project configuration. Generated source, SQL and PostgreSQL belong to the application owner; no BaseStack-hosted infrastructure is required.
+## Application Services — 0.3.2
 
-## Current implementation — 0.3.1 Auth Core
+The repository audit found an existing 0.3.1 Auth Core implementation. This release
+extends it without rewriting the working 0.2 Composition Engine. See the
+[audit record](APPLICATION-SERVICES-AUDIT.md) and [service guide](SERVICES.md).
 
-| Location | Responsibility |
+| Package | Responsibility |
 | --- | --- |
-| `cmd/basestack/main.go` | Thin entry point, signal context and exit status |
-| `internal/cli` | Composition commands, service/database commands, generated runtime compilation and foreground process management |
-| `internal/project` | Unchanged composition schema v2, validation and atomic writes |
-| `internal/registry` | Portable component/variant/props definitions and theme tokens |
-| `internal/strictjson` | Shared exact-field, duplicate-key and trailing-value rejection |
-| `internal/runtime/config` | Services schema v2 (legacy v1 supported) and private environment loading/overrides |
-| `internal/runtime/database` | pgx pool creation, connectivity checks and safe error messages |
-| `internal/runtime/migrations` | SQL discovery/creation, checksums, metadata, locking and atomic application |
-| `internal/runtime/auth` | Identity service, SQL repository, Argon2id, digest challenges, delivery, rate limits and HTTP |
-| `internal/runtime/server` | Standard Go HTTP boundary, health route, CORS and bounded shutdown |
-| `internal/runtime/app` | Runtime wiring and serve/migrate/status entry points |
-| `internal/runtime/command` | Source of generated `cmd/server/main.go` |
-| `internal/services` | Local credential creation and Docker Compose operations |
-| `internal/scaffold` | Exclusive new-directory creation and embedded source copying |
-| `scripts/verify-generated.sh` | Full real-PostgreSQL and generated-application verification |
+| `cmd/basestack`, `internal/cli` | Argument validation, composition/service commands, foreground process management |
+| `internal/project` | Composition schema v2, validation, atomic writes and private-state ignore handling |
+| `internal/registry`, `internal/strictjson` | Shared frontend catalog and exact/duplicate-free JSON parsing |
+| `internal/runtime/config` | Services schemas v1/v2/v3, environment selection, private profile store |
+| `internal/runtime/database` | PostgreSQL connection/pool and sanitized driver errors |
+| `internal/runtime/migrations` | Database provider boundary, discovery, checksums, locking, apply/status/rollback |
+| `internal/runtime/auth` | Identities, Argon2id, challenges, delivery, opaque sessions and HTTP |
+| `internal/runtime/rbac` | Persistent roles, grants, assignments and exact permission checks |
+| `internal/runtime/storage` | Provider interface, private local buckets, metadata and authorized HTTP |
+| `internal/runtime/functions` | Compiled registry, metadata, execution context, authorized HTTP |
+| `internal/runtime/privatefs` | Private directory/file checks shared by new local state providers |
+| `internal/runtime/server` | HTTP routing, CORS, response headers, lifecycle and shutdown |
+| `internal/runtime/app` | Configuration, provider wiring, runtime commands and resource ownership |
+| `internal/services` | Optional local PostgreSQL Compose lifecycle and private credentials |
+| `internal/scaffold` | Exclusive project creation; embeds tested runtime and frontend sources |
 
-The application runtime is one **modular monolith**, not one deployable service per feature. Auth and future RBAC/data modules attach to the same HTTP/runtime boundary unless later scaling evidence justifies a split.
+This is a modular monolith. Functions/storage/Auth do not require separate
+microservices. The dependency direction is CLI → project/scaffold/services;
+app → runtime modules; storage/functions HTTP → Auth session interface and RBAC
+interface; PostgreSQL adapters → pgx. Runtime modules do not import the CLI or
+React. Generated sources have their module path rewritten and run independently.
+Dependencies/checksums are embedded and checked for drift.
 
-Dependency direction: CLI → project/scaffold/services; services → runtime config; runtime app → config/database/migrations/server/auth; Auth HTTP → service → repository → PostgreSQL; migrations → database; config and registry → strictjson. Scaffold embeds runtime source, not an opaque server binary. The runtime has no dependency on the CLI or frontend renderer. Go's standard library supplies HTTP; pgx supplies direct PostgreSQL access.
+`app.Options` allows injecting database, storage and secret providers, delivery, and
+function definitions. The database provider owns health, migration semantics and
+close; built-in Auth/RBAC explicitly need its PostgreSQL pool. Other database
+engines will require matching repositories, not a misleading configuration alias.
+`auth.Sessions`, `rbac.Authorizer`, `storage.Store` and `config.SecretStore` describe
+real consumer boundaries, without creating an interface for every implementation.
 
-The embedded dependency manifest/checksums match the repository's pinned pgx dependencies and are tested for drift. The Go 1.23-compatible pgx release is pinned explicitly rather than floating. Runtime sources and their tests are copied with the generated module path substituted, so owners can run and test independently. Changing dependency pins requires syncing `internal/runtime/module.txt` and `sums.txt` after `go mod tidy`.
+## Versioned configuration boundaries
 
-## Configuration contracts
+Composition remains schema v2 (`name`, `theme`, `pages`, ordered typed sections).
+The browser never reads `basestack/services.json` or private environment profiles.
+Services v1 is database/API only; v2 retains Auth Core's credential-only behavior;
+v3 adds session behavior, provider names, authorization, storage and functions.
+Unknown new fields in legacy versions are rejected, including null fields.
+Projects without services keep their frontend workflow. No automatic source or
+historical SQL rewriting occurs.
 
-**Composition schema v2 is unchanged:** `schemaVersion`, `name`, `theme`, `pages`, and page-scoped ordered sections with `id`, `type`, `variant`, `props`. Old v2 configs are not reinterpreted. Unknown `services` fields in that manifest remain invalid.
+Private profile schema v1 stores bounded string values under ignored `.basestack/`.
+Process variables override profiles, dotenv and generated local credentials.
+Defaults are production-safe; local email delivery requires explicit development.
+Public browser settings use their own tiny `src/services.json` schema v1. The
+client exposes Auth/storage/function HTTP operations; it never exposes SQL or
+internal Go provider types.
 
-**Services schema v2 is separate:** `basestack/services.json` specifies database/API enabled flags, ports, bind host, CORS origins and explicit Auth/verification flags. Legacy services v1 remains Auth-free. This explicitly versioned sidecar extends the project without changing a strict browser-facing schema or bundling backend settings into browser assets. Existing projects without it remain frontend-only. There is no automatic source upgrade; adoption is reviewed copying/merging of generated runtime files.
+## Lifecycle and security boundaries
 
-Public configuration contains no connection passwords. Private process variables, `.env` and `.basestack/local.env` supply runtime values without mutating global environment state. See [services configuration and compatibility](SERVICES.md#configuration-and-compatibility-decision).
+Startup validates configuration, constructs providers and verifies enabled DB/Auth
+state before opening the listener. The runtime owns pool shutdown. HTTP has bounded
+timeouts and context cancellation. CLI runtime commands build the application's
+own source into unique private temporary directories and run foreground children;
+cancellation signals the owned process tree and waits with a bounded fallback.
+Docker manages only the optional local PostgreSQL instance and never deletes its
+volume on stop. Containers can be replaced with externally managed PostgreSQL.
 
-## Runtime and PostgreSQL
+Credentials use established Argon2id and cryptographic randomness. Session tokens
+are opaque, database-backed and stored only as digests. Protected routes resolve
+a session and then check live exact permissions. Roles have no special-name bypass.
+Role and local storage CLI operations trust the operator's filesystem/database
+access; there are no unauthenticated role-management APIs. Generated object IDs,
+private directories, atomic publication, size limits and path checks protect local
+storage. Private profiles use exclusive locks and atomic writes.
 
-Startup creates a standard pgx pool and verifies connectivity before opening the HTTP listener when database support is enabled. Database operations receive contexts, pools close after HTTP shutdown, and errors omit sensitive driver details. `/api/health` reflects a real pool ping; it reports unavailable/disabled states explicitly.
+Compiled function code is trusted application source. It receives context,
+validated routing metadata, JSON input and private environment access, and must
+honor cancellation and avoid returning secrets. It is not a sandbox or remote
+serverless platform. Generic boundary errors omit secrets; Compose logs are not
+relayed. All deployed services still need TLS, private volumes, backup/retention
+policy and reviewed production delivery. See [Auth](AUTH.md) for residual limits.
 
-PostgreSQL remains directly accessible using SQL, pgx, psql, pg_dump and external tools. Local Compose runs PostgreSQL 17 with loopback port publishing, persistent volumes and a health check. It does not deploy an API microservice. `services stop` preserves data; there is no reset/drop CLI.
+## Composition preserved
 
-Migrations are owner-written SQL ordered by six-digit sequence. `basestack_internal.schema_migrations` records applied version/name/checksum/time. A transaction-scoped advisory lock serializes runners. The pending batch and its metadata commit together; failures roll back. Status is read-only with respect to persistent metadata. Applied history must match a prefix of local files exactly. The initial migration is an empty baseline; the next migration creates the Auth users, challenges and events tables.
+Six component types, twelve variants and three themes use the same portable catalog
+and React renderer as 0.2. Page links use full navigation and need static-host
+fallback to index.html. Generated frontend tests verify schema rules, rendering,
+escaping and navigation. Service client imports are opt-in; composition rendering
+does not make new network calls.
 
-HTTP has explicit-origin CORS, JSON errors, basic headers and bounded request/idle/shutdown timeouts. Auth verifies credentials and account challenges; sessions and permission enforcement remain deferred. Default local access is loopback-only; production TLS, secrets, authorization and deployment remain separate work.
+## Verification and next scope
 
-## Composition frontend — preserved
+CI runs `scripts/verify-generated.sh`: root/generated Go tests/race/vet, real
+PostgreSQL migrations and rollback, Auth/session/RBAC, live API/CLI storage and
+functions, private environments, frontend-only compatibility, frontend tests,
+typechecking, production build, shutdown and volume persistence. Integration tests
+use randomly named disposable databases and remove only their owned test databases.
+CI publishes CLI/frontend build artifacts, never secrets, logs or database files.
 
-Six component types each have two variants. Shared CSS applies three token themes. The registry catalog is copied into each project and consumed by Go/JavaScript validators; React uses discriminated TypeScript props. Page routing matches URL paths exactly using ordinary links. Static hosting still requires fallback to `index.html` and assumes domain-root hosting.
-
-Accessibility includes one page h1, semantic elements, labeled navigation, visible keyboard focus and a skip link. Tests cover rendering/escaping/navigation; this is not a full accessibility audit. No API health call or backend environment value is inserted into the public React application.
-
-## Safety and ownership
-
-`init` refuses existing files, directories and symlinks. Composition mutations validate before temporary-file/rename replacement. Service startup creates random credentials only in ignored local state and never overwrites them. Each generated Compose project has a unique name. SQL creation uses exclusive locking/file creation; historical SQL is never rewritten automatically.
-
-`api`/`db` compile the project's own Go source into a unique ignored temporary directory and run it in the foreground. Cancellation signals the owned process tree, waits for bounded shutdown, and falls back to termination if needed. Windows uses native process-tree termination when programmatic interrupt is unavailable; run the generated binary directly for native console signal behavior. Frontend development remains a separate, independently usable npm workflow.
-
-No CLI/source upgrade silently overwrites generated customizations. Registry package installation and automatic source migration remain future work. Concurrent composition editors are still unsupported; database migration concurrency is handled by PostgreSQL locking.
-
-## Tests and CI
-
-The original 0.1/0.2 lifecycle, schema, props, variants/themes and rendering tests remain. New tests cover Auth password/token/lifecycle security, concurrent signup/redemption, HTTP privacy and PostgreSQL constraints, strict services/env configuration, unavailable databases, safe errors, HTTP lifecycle/health/CORS, migration discovery/order/checksums/rollback/concurrency, command validation, generated ownership and private credential files.
-
-The end-to-end script creates a fresh project, starts its PostgreSQL using Compose with random private credentials, runs root and generated Go tests/race/vet (including isolated real-database tests), checks migration idempotence and persistence, verifies live API/frontend behavior, and runs all frontend tests/typechecks/build. CI executes that script. Only the CLI and frontend build are uploaded; secrets, database files and runtime logs are not artifacts.
-
-## Roadmap
-
-- **0.1 Foundation — complete:** initial CLI, sections, preview/build, tests and documentation.
-- **0.2 Composition Engine — complete:** multi-page schema, variants, typed props, token themes, registry and expanded tests.
-- **0.3.0 Application Services Foundation — complete:** Go modular runtime, PostgreSQL, local services, SQL migrations, health and initial HTTP/environment safeguards.
-- **0.3.1 Auth Core — current:** UUID accounts, Argon2id credentials, email verification/reset challenges, lifecycle, rate limits, safe audit events and HTTP. See [Auth](AUTH.md).
-- **0.3.2 Sessions, Tokens & Auth Security — next:** authenticated session/token lifecycle, revocation, expiry and security hardening.
-- **0.3.3 RBAC/Permissions — planned:** real role/permission enforcement against authenticated identities.
-- **0.3.4 Data/CRUD — planned:** PostgreSQL-backed data modules and validated CRUD APIs with permission checks.
-- **0.3.5 Auth/UI integration — planned:** real UI flows connected to the implemented Auth/session services.
-- **0.4 Studio — planned:** visual composition and configuration editing using these same schemas.
-- **V1 release candidate — planned:** storage, deployment adapters, package/source upgrade strategy, accessibility/security review and integration coverage.
-
-Sessions/tokens, RBAC, CRUD APIs, billing/licensing, AI, storage, realtime, Studio and deployment are not implemented in 0.3.1. This milestone stops at Auth Core. Login issues no session or bearer credential.
+0.4 should focus on integration and operational polish: usable Auth/application UI,
+provider conformance tests, encrypted secret adapters, session rotation and retention,
+reviewable source upgrades, and cross-platform verification. Studio can build on
+these same schemas when that foundation is ready. Cloud hosting, billing, an ORM,
+queues, realtime subscriptions, multi-tenancy and a marketplace remain separate
+milestones rather than prerequisites for a complete local application.

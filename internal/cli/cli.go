@@ -11,12 +11,23 @@ import (
 	"github.com/Janon-Emersion-T/Basestack/internal/project"
 )
 
-const Version = "0.3.1"
+const Version = "0.3.2"
 
 func Run(args []string, out io.Writer) error { return RunContext(context.Background(), args, out) }
 func RunContext(ctx context.Context, args []string, out io.Writer) error {
 	if len(args) == 0 {
 		args = []string{"help"}
+	}
+	if len(args) == 2 && (args[1] == "--help" || args[1] == "help") {
+		usage := map[string]string{
+			"env":      "basestack env list | show <environment> | set <environment> <KEY> (stdin) | unset <environment> <KEY>\nEnvironments: development, test, production. Values are always redacted.",
+			"db":       "basestack db status | migrate | rollback | create-migration <name>\nRollback reverses only the latest applied migration with a recorded .down.sql file.",
+			"services": "basestack services list | status | start | stop\nstart/stop manage local PostgreSQL. Run the API separately with basestack api; volumes are retained.",
+		}
+		if text, ok := usage[args[0]]; ok {
+			fmt.Fprintln(out, text)
+			return nil
+		}
 	}
 	switch args[0] {
 	case "help", "--help", "-h":
@@ -30,6 +41,10 @@ func RunContext(ctx context.Context, args []string, out io.Writer) error {
 		return nil
 	case "auth":
 		return authCommand(args[1:], out)
+	case "env":
+		return envCommand(args[1:], os.Stdin, out)
+	case "functions", "storage", "roles":
+		return applicationCommand(ctx, args, out)
 	case "services":
 		return servicesCommand(ctx, args[1:], out)
 	case "migration":
@@ -98,11 +113,21 @@ Commands:
   check                             Validate basestack.json
   dev                               Start the local Vite server
   build                             Validate and build for production
-  services start|stop|status        Manage local PostgreSQL (Docker Compose)
+  services list|start|stop|status        Manage local PostgreSQL (Docker Compose)
   migration new <name>              Create an ordered SQL migration
-  db migrate|status                 Apply migrations or inspect database history
+  db migrate|status|rollback                 Apply migrations or inspect database history
+  db create-migration <name>        Create a forward SQL migration
+  functions list|inspect|run         Discover or execute compiled server functions
+  storage buckets|create-bucket|list|put|get|delete
+                                    Manage private local objects (put reads stdin)
+  roles create|grant|revoke|assign|unassign|check
+                                    Manage persistent role permissions
   api                               Run the generated Go API (separate terminal)
   auth status                       Show Auth configuration without secrets
+  env list                          List supported environments
+  env show <environment>            Show stored profile keys, always redacted
+  env set <environment> <KEY>        Store a private value read from stdin
+  env unset <environment> <KEY>      Remove a stored profile override
   version                           Print CLI version
 
 Run project commands inside a generated project.

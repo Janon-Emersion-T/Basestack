@@ -15,10 +15,16 @@ import (
 
 // Compile the owner's generated source, so local API edits are honored by the CLI.
 func runRuntime(ctx context.Context, action string, out io.Writer) error {
+	return runRuntimeArgs(ctx, []string{action}, out)
+}
+func runRuntimeArgs(ctx context.Context, args []string, out io.Writer) error {
 	if _, err := project.Read(); err != nil {
 		return err
 	}
 	if _, err := config.Read("."); err != nil {
+		return err
+	}
+	if err := project.EnsurePrivateIgnore(); err != nil {
 		return err
 	}
 	if info, err := os.Stat("cmd/server/main.go"); err != nil || !info.Mode().IsRegular() {
@@ -54,7 +60,7 @@ func runRuntime(ctx context.Context, action string, out io.Writer) error {
 	if err := build.Run(); err != nil {
 		return fmt.Errorf("build application runtime failed; check Go version and generated source")
 	}
-	cmd := exec.Command(binary, action)
+	cmd := exec.Command(binary, args...)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = out
 	cmd.Stderr = out

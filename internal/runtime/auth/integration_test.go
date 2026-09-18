@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"github.com/Janon-Emersion-T/Basestack/internal/runtime/migrations"
+	"github.com/Janon-Emersion-T/Basestack/internal/runtime/rbac"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"io"
@@ -82,7 +83,7 @@ func authDB(t *testing.T) *pgxpool.Pool {
 		t.Fatal("test pool failed")
 	}
 	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "000001_auth.sql"), []byte(SchemaSQL), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "000001_auth.sql"), []byte(SchemaSQL+"\n"+SessionSchemaSQL+"\n"+rbac.SchemaSQL), 0644); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := migrations.Run(ctx, pool, dir, true); err != nil {

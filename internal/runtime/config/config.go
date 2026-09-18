@@ -19,8 +19,9 @@ const File = "basestack/services.json"
 const LocalEnv = ".basestack/local.env"
 
 type Database struct {
-	Enabled *bool `json:"enabled"`
-	Port    int   `json:"port"`
+	Provider string `json:"provider,omitempty"`
+	Enabled  *bool  `json:"enabled"`
+	Port     int    `json:"port"`
 }
 type API struct {
 	Enabled     *bool    `json:"enabled"`
@@ -33,10 +34,21 @@ type Auth struct {
 	RequireEmailVerification *bool `json:"requireEmailVerification"`
 }
 type Services struct {
+	Storage       *Storage `json:"storage,omitempty"`
+	Functions     *Feature `json:"functions,omitempty"`
+	Authorization *Feature `json:"authorization,omitempty"`
 	Auth          *Auth    `json:"auth,omitempty"`
 	SchemaVersion int      `json:"schemaVersion"`
 	Database      Database `json:"database"`
 	API           API      `json:"api"`
+}
+type Feature struct {
+	Enabled *bool `json:"enabled"`
+}
+type Storage struct {
+	Enabled        *bool  `json:"enabled"`
+	Provider       string `json:"provider"`
+	MaxObjectBytes int64  `json:"maxObjectBytes"`
 }
 type Runtime struct {
 	Environment     string
@@ -57,6 +69,19 @@ func Default() Services {
 	yes, apiYes, authYes, verifyYes := true, true, true, true
 	return Services{SchemaVersion: 2, Auth: &Auth{Enabled: &authYes, RequireEmailVerification: &verifyYes}, Database: Database{Enabled: &yes, Port: 54322}, API: API{Enabled: &apiYes, Host: "127.0.0.1", Port: 54321, CORSOrigins: []string{"http://localhost:5173", "http://127.0.0.1:5173"}}}
 }
+
+// ApplicationDefault opts new projects into the complete services foundation.
+// Default remains the legacy Auth Core configuration for source compatibility.
+func ApplicationDefault() Services {
+	c := Default()
+	c.SchemaVersion = 3
+	c.Database.Provider = "postgresql"
+	storage, functions, authorization := true, true, true
+	c.Storage = &Storage{&storage, "local", 10 << 20}
+	c.Functions = &Feature{&functions}
+	c.Authorization = &Feature{&authorization}
+	return c
+}
 func Parse(data []byte) (Services, error) {
 	var c Services
 	if err := strictjson.Decode(data, &c); err != nil {
@@ -64,6 +89,18 @@ func Parse(data []byte) (Services, error) {
 	}
 	var raw map[string]json.RawMessage
 	_ = json.Unmarshal(data, &raw)
+	if c.SchemaVersion < 3 {
+		for _, key := range []string{"storage", "functions", "authorization"} {
+			if _, exists := raw[key]; exists {
+				return c, fmt.Errorf("new service fields require services schema v3")
+			}
+		}
+		var db map[string]json.RawMessage
+		_ = json.Unmarshal(raw["database"], &db)
+		if _, exists := db["provider"]; exists {
+			return c, fmt.Errorf("database.provider requires services schema v3")
+		}
+	}
 	if c.SchemaVersion == 1 {
 		if _, exists := raw["auth"]; exists {
 			return c, fmt.Errorf("auth is not allowed in services schema v1")
@@ -95,13 +132,30 @@ func Origins(values []string) error {
 	return nil
 }
 func (c Services) Validate() error {
-	if c.SchemaVersion != 1 && c.SchemaVersion != 2 {
-		return fmt.Errorf("unsupported services schemaVersion; expected 1 or 2")
+	if c.SchemaVersion != 1 && c.SchemaVersion != 2 && c.SchemaVersion != 3 {
+		return fmt.Errorf("unsupported services schemaVersion; expected 1, 2 or 3")
+	}
+	if c.SchemaVersion < 3 && (c.Storage != nil || c.Functions != nil || c.Authorization != nil || c.Database.Provider != "") {
+		return fmt.Errorf("new service fields require services schema v3")
+	}
+	if c.SchemaVersion == 3 {
+		if c.Storage == nil || c.Storage.Enabled == nil || c.Functions == nil || c.Functions.Enabled == nil || c.Authorization == nil || c.Authorization.Enabled == nil {
+			return fmt.Errorf("services v3 requires storage, functions and authorization settings")
+		}
+		if c.Database.Provider != "postgresql" || c.Storage.Provider != "local" {
+			return fmt.Errorf("supported providers are postgresql and local storage")
+		}
+		if c.Storage.MaxObjectBytes < 1 || c.Storage.MaxObjectBytes > 1<<30 {
+			return fmt.Errorf("storage.maxObjectBytes must be between 1 and 1073741824")
+		}
+		if Enabled(c.Authorization.Enabled) && (c.Auth == nil || !Enabled(c.Auth.Enabled)) {
+			return fmt.Errorf("authorization requires Auth")
+		}
 	}
 	if c.SchemaVersion == 1 && c.Auth != nil {
 		return fmt.Errorf("auth is not allowed in services schema v1")
 	}
-	if c.SchemaVersion == 2 && (c.Auth == nil || c.Auth.Enabled == nil || c.Auth.RequireEmailVerification == nil) {
+	if c.SchemaVersion >= 2 && (c.Auth == nil || c.Auth.Enabled == nil || c.Auth.RequireEmailVerification == nil) {
 		return fmt.Errorf("services schema v2 requires auth.enabled and auth.requireEmailVerification booleans")
 	}
 	if c.Auth != nil && Enabled(c.Auth.Enabled) && !Enabled(c.Database.Enabled) {
@@ -119,11 +173,14 @@ func (c Services) Validate() error {
 	return Origins(c.API.CORSOrigins)
 }
 func Load(dir string) (Runtime, error) {
+	return LoadWithSecrets(dir, nil)
+}
+func LoadWithSecrets(dir string, store SecretStore) (Runtime, error) {
 	services, err := Read(dir)
 	if err != nil {
 		return Runtime{}, err
 	}
-	values, err := Environment(dir)
+	values, err := EnvironmentWithStore(dir, store)
 	if err != nil {
 		return Runtime{}, err
 	}
@@ -179,8 +236,8 @@ func Resolve(c Services, lookup func(string) (string, bool)) (Runtime, error) {
 	if v, ok := lookup("BASESTACK_ENV"); ok {
 		result.Environment = v
 	}
-	if result.Environment != "production" && result.Environment != "development" {
-		return result, fmt.Errorf("BASESTACK_ENV must be production or development")
+	if !ValidEnvironment(result.Environment) {
+		return result, fmt.Errorf("BASESTACK_ENV must be production, development or test")
 	}
 	if v, ok := lookup("BASESTACK_AUTH_DELIVERY"); ok {
 		result.AuthDelivery = v

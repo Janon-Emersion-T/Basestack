@@ -5,5 +5,5 @@ import "embed"
 
 // Source includes runtime tests; generated applications can run go test ./... independently.
 //
-//go:embed config database migrations server app auth command module.txt sums.txt
+//go:embed config database migrations server app auth command privatefs rbac storage functions module.txt sums.txt
 var Source embed.FS

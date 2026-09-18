@@ -17,10 +17,10 @@ func TestMigrationCLIAndLegacyCompatibility(t *testing.T) {
 	}
 	before, _ := os.ReadFile("basestack.json")
 	output := run(t, "migration", "new", "create_example")
-	if !strings.Contains(output, "000003_create_example.sql") {
+	if !strings.Contains(output, "000004_create_example.sql") {
 		t.Fatal(output)
 	}
-	if _, err := os.Stat(filepath.Join("basestack", "migrations", "000003_create_example.sql")); err != nil {
+	if _, err := os.Stat(filepath.Join("basestack", "migrations", "000004_create_example.sql")); err != nil {
 		t.Fatal(err)
 	}
 	for _, args := range [][]string{{"migration", "new", "create_example"}, {"migration", "new", "../unsafe"}, {"migration"}, {"migration", "new"}, {"services", "delete"}, {"services", "start", "extra"}, {"db", "reset"}, {"db"}, {"api", "extra"}} {
@@ -58,7 +58,7 @@ func TestAuthStatus(t *testing.T) {
 		t.Fatal(err)
 	}
 	output := run(t, "auth", "status")
-	if !strings.Contains(output, "Auth enabled: true") || !strings.Contains(output, "no sessions") {
+	if !strings.Contains(output, "Auth enabled: true") || !strings.Contains(output, "Sessions:") {
 		t.Fatal(output)
 	}
 	t.Setenv("BASESTACK_DATABASE_URL", "postgres://PRIVATE_PASSWORD@localhost/db")

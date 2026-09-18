@@ -1,22 +1,23 @@
-# Auth Core — BaseStack 0.3.1
+# Authentication — BaseStack 0.3.2
 
-Auth is a module in the editable Go modular monolith. It provides accounts, password credential verification, email verification and password reset. **Successful login does not establish a session or authorize subsequent requests.**
+Auth is a module in the editable Go modular monolith. It provides accounts, password credential verification, email verification and password reset. Services schema v3 adds opaque bearer sessions, logout and current-user retrieval. Legacy services schema v2 retains credential-only login.
 
 ## Architecture and ownership
 
-`internal/runtime/auth/http.go` handles transport, strict JSON and rate limits. `service.go` coordinates validation, hashing, delivery and account policy. `repository.go` owns parameterized PostgreSQL queries and transactional transitions. Passwords, challenges, public models and delivery have focused source files. `app.RunWithDelivery` wires the module into the existing server. There is no separate Auth deployment, identity vendor or proprietary database interface.
+`internal/runtime/auth/http.go` handles transport, strict JSON and rate limits. `service.go` coordinates validation, hashing, delivery and account policy. `repository.go` owns parameterized PostgreSQL queries and transactional transitions. Passwords, challenges, public models and delivery have focused source files. `app.RunWithOptions` (or the compatible `RunWithDelivery`) wires the module into the existing server. There is no separate Auth deployment, identity vendor or proprietary database interface.
 
-Generated projects receive editable source, tests, pinned Go dependencies and SQL. CLI upgrades never replace this source. The composition schema and frontend registry remain unchanged; functional Auth components belong to 0.3.5.
+Generated projects receive editable source, tests, pinned Go dependencies and SQL. CLI upgrades never replace this source. The composition schema and frontend registry remain unchanged; a typed browser client is included; visual Auth components remain future work.
 
 ### Database
 
-Fresh projects apply the unchanged `000001_initial.sql`, then `000002_auth_core.sql`. Its authoritative source is `internal/runtime/auth/schema.sql`, embedded and copied by the scaffold. The existing migration runner preserves checksums, ordered history, advisory locking and transactional application.
+Fresh projects apply the unchanged `000001_initial.sql`, then `000002_auth_core.sql`. A third additive migration adds sessions and RBAC. The Auth Core migration’s authoritative source is `internal/runtime/auth/schema.sql`, embedded and copied by the scaffold. The existing migration runner preserves checksums, ordered history, advisory locking and transactional application.
 
 | Table in `basestack_auth` | Contents |
 | --- | --- |
 | `users` | Random UUIDv4 ID; email and unique normalized email; encoded password hash; explicit status; verification, creation, update, last-login and password-change timestamps |
 | `challenges` | SHA-256 token digest; user foreign key; purpose; expiry; consumed timestamp |
 | `events` | Event ID, nullable user ID, event type and timestamp |
+| `sessions` | SHA-256 bearer digest, user foreign key, password-change timestamp, creation and expiry |
 
 Email normalization trims surrounding whitespace and lowercases ASCII addresses. It does not remove dots or plus tags. Internationalized addresses and display-name syntax are currently rejected. PostgreSQL enforces normalized uniqueness with C collation and additional value/status constraints; concurrent signup cannot create duplicate accounts. Timestamps use `timestamptz`.
 
@@ -28,18 +29,18 @@ For an existing 0.3.0 project, merge reviewed source/dependency/configuration ch
 
 ## HTTP contract
 
-All routes below use POST and `Content-Type: application/json`. JSON is strict: unknown/case-mismatched fields, duplicates, trailing values and malformed payloads fail. Bodies are limited to 8192 bytes. Secrets belong in request bodies, never URLs. Use HTTPS outside loopback development.
+The credential/challenge routes below use POST and `Content-Type: application/json`. JSON is strict: unknown/case-mismatched fields, duplicates, trailing values and malformed payloads fail. Bodies are limited to 8192 bytes. Secrets belong in request bodies, never URLs. Use HTTPS outside loopback development.
 
 | Route | Body | Success |
 | --- | --- | --- |
 | `/api/auth/signup` | `email`, `password` | 201, `data.user` |
-| `/api/auth/login` | `email`, `password` | 200, `data.credentialsVerified: true`, `data.sessionIssued: false`, `data.user` |
+| `/api/auth/login` | `email`, `password` | 200, `data.credentialsVerified: true`, `data.sessionIssued: true`, `data.session` and `data.user` in v3 |
 | `/api/auth/verify-email` | `token` | 200, `data.user` |
 | `/api/auth/verify-email/request` | `email` | 202, generic `data.message` |
 | `/api/auth/password/forgot` | `email` | 202, identical generic `data.message` for existing/missing/ineligible accounts |
 | `/api/auth/password/reset` | `token`, `password` | 200, `data.passwordChanged: true`, `data.sessionIssued: false` |
 
-The explicit public user contains only `id`, `email`, `emailVerified`, `status`, `createdAt`. Internal user fields are excluded from JSON serialization; mapping to the public model is explicit. No endpoint returns a hash, raw challenge, cookie, session or access token.
+The explicit public user contains only `id`, `email`, `emailVerified`, `status`, `createdAt`. Internal user fields are excluded from JSON serialization; mapping to the public model is explicit. No endpoint returns a hash, raw challenge or cookie. The v3 login response deliberately returns its newly issued bearer token in `data.session.token`, with `expiresAt` and public `user`; protect that response.
 
 Errors use `{"error":{"code":"invalid_credentials","message":"Credentials could not be verified."}}`. Wrong credentials, missing accounts, unverified accounts and suspended/disabled accounts share that 401 error. Invalid, expired, wrong-purpose and consumed challenges share 400 `token_invalid`. Other codes include 400 `invalid_request`, 409 `signup_unavailable`, 413 `request_too_large`, 415 `unsupported_media_type`, 429 `rate_limited`, and 503 `auth_busy`/`auth_unavailable`. Errors omit raw Go/SQL/driver details. Rate/busy responses include `Retry-After`.
 
@@ -59,13 +60,13 @@ Tokens contain 32 cryptographically random bytes, encoded as unpadded base64url.
 
 Issuing a replacement invalidates the previous open challenge for that purpose. User-row locks and transactions make redemption single-use even under concurrent requests. Verification updates verification time/status and consumes its challenge together. Reset updates the password hash and `password_changed_at`, consumes reset challenges and records its event together. Suspension/disabling also invalidates open challenges. Password reset does not verify an email or reactivate an account.
 
-`password_changed_at` and the service transaction boundary give 0.3.2 a place to attach real session invalidation. No session invalidation is claimed now.
+Sessions record `password_changed_at`. Every authenticated lookup compares it with the current user row, so password changes/resets immediately invalidate prior sessions without changing historical Auth SQL. Suspended/disabled accounts fail every session lookup. Requests already authorized can finish; this is not cancellation of in-flight application operations.
 
 Forgot/resend return the same accepted response even if delivery or repository work fails, apart from input validation. A 300 ms response floor reduces simple timing differences, but slower synchronous delivery can still differ. Delivery occurs after commit; failure records a safe event, and verification resend allows recovery. There is no durable delivery queue, retry worker or delivery-success guarantee. A future provider should use bounded calls and a reviewed queue/timing policy. These choices and their limits are informed by [OWASP forgot-password guidance](https://cheatsheetseries.owasp.org/cheatsheets/Forgot_Password_Cheat_Sheet.html).
 
 ## Configuration and delivery
 
-Fresh `basestack/services.json` uses services schema v2 with:
+Fresh `basestack/services.json` uses services schema v3 with:
 
 ```json
 "auth": {"enabled": true, "requireEmailVerification": true}
@@ -73,11 +74,11 @@ Fresh `basestack/services.json` uses services schema v2 with:
 
 This is a field within the full services object. Auth requires enabled PostgreSQL. Legacy services schema v1 remains supported with Auth absent; adding even `auth: null` to v1 is rejected. Browser-facing `basestack.json` remains composition schema v2 and contains no backend secrets.
 
-Environment precedence is process variables, `.env`, `.basestack/local.env`, defaults. Values are literal; see [services](SERVICES.md).
+Environment precedence is process variables, the selected private environment profile, `.env`, `.basestack/local.env`, defaults. Values are literal; see [services](SERVICES.md).
 
 | Variable | Default / allowed values |
 | --- | --- |
-| `BASESTACK_ENV` | `production`; only `production` or `development` |
+| `BASESTACK_ENV` | `production`; `production`, `development` or `test` |
 | `BASESTACK_AUTH_DELIVERY` | `none`; `none`, `local`, `external` |
 | `BASESTACK_AUTH_ARGON2_MEMORY_KIB` | 65536; 19456–262144 |
 | `BASESTACK_AUTH_ARGON2_ITERATIONS` | 3; 2–6 |
@@ -119,8 +120,34 @@ The implementation review covered cryptographic randomness, bounded Argon2 parsi
 
 Remaining limits include signup availability disclosure, imperfect timing uniformity, synchronous non-durable delivery, single-process abuse controls, owner-managed retention and untested native Windows outbox behavior. Internal administrative methods require a future authorization boundary before public exposure. CORS is an explicit-origin browser policy, not authorization.
 
-## Milestone boundary
+## Sessions and protected routes
 
-0.3.1 does **not** provide persistent authenticated sessions, access tokens, refresh tokens, OAuth/social login, MFA, OTP login, magic links, OIDC, SSO/SAML, passkeys, RBAC, anonymous accounts, identity linking or Auth UI. There are no placeholder endpoints claiming these capabilities.
+The `auth.Sessions` interface provides `SignIn`, `Current` and `Logout`. The
+PostgreSQL implementation uses 32 random bytes from `crypto/rand`, encoded as
+unpadded base64url. Only SHA-256 digests are stored. These are opaque database
+sessions, not JWTs or a new cryptographic protocol. Session insertion rechecks the
+locked user's status, password hash and password-change timestamp after credential
+verification, so a concurrent password reset cannot mint a session from stale
+credentials. Database time sets the 12-hour absolute expiry. At most ten sessions
+per account are retained after login; expired and oldest rows are pruned then.
 
-**Next: 0.3.2 — Sessions, Tokens & Auth Security.** Design and implement real session issuance after credential verification, transport/storage policy, expiration, rotation/replay protection, revocation, logout, password-change invalidation and the corresponding security/integration tests. RBAC remains 0.3.3, Data/CRUD 0.3.4 and Auth UI Integration 0.3.5.
+`GET /api/auth/me` accepts `Authorization: Bearer <token>` and returns `data.user`.
+`POST /api/auth/logout` uses the same header, deletes that session, and returns
+`data.loggedOut: true`; repeating logout of a syntactically valid token succeeds.
+Neither route accepts credentials in cookies, query parameters or user-ID headers.
+Invalid/expired/revoked credentials receive a generic 401. There are no cookies,
+refresh tokens, sliding expiry or automatic persistent browser login. The browser
+client stores the token only in closure memory and requires login after reload.
+Use HTTPS outside loopback and never log tokens, login responses or Authorization.
+
+Private function and storage routes use the verified identity and
+`rbac.Authorizer.Check`; a successful login grants no roles by itself. See
+[services](SERVICES.md#auth-and-authorization) for explicit permission management.
+Auth, session and permission tests exercise real PostgreSQL alongside the existing
+credential/challenge tests. The live verification script covers current-user,
+logout, password-reset invalidation and absence of tokens in runtime logs.
+
+Remaining scope: refresh-token rotation, OAuth/social login, MFA, OTP login,
+magic links, OIDC, SSO/SAML, passkeys, identity linking and Auth UI. Production
+email delivery remains injected application code. Expired sessions belonging to
+users who never log in again need owner-managed retention; there is no scheduler.

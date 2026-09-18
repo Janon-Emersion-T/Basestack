@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"github.com/Janon-Emersion-T/Basestack/internal/runtime/config"
 	"io"
@@ -68,7 +69,7 @@ func Execute(ctx context.Context, dir, action string, out io.Writer, runner Runn
 	case "stop":
 		args = append(args, "stop", "postgres")
 	case "status":
-		args = append(args, "ps", "--all", "postgres")
+		args = append(args, "ps", "--all", "--format", "json", "postgres")
 	}
 	env := []string{}
 	for key, value := range values {
@@ -84,15 +85,42 @@ func Execute(ctx context.Context, dir, action string, out io.Writer, runner Runn
 		fmt.Fprintln(out, "Starting local PostgreSQL with Docker Compose...")
 	}
 	output, err := runner(deadline, dir, args, env)
-	for _, key := range []string{"BASESTACK_DB_PASSWORD", "BASESTACK_DATABASE_URL"} {
-		if value := values[key]; value != "" {
-			output = strings.ReplaceAll(output, value, "[redacted]")
-		}
-	}
 	if err != nil {
 		return fmt.Errorf("Docker Compose %s failed; ensure Docker is running and Compose v2 is installed (use services status to inspect containers)", action)
 	}
-	fmt.Fprint(out, output)
+	// Do not relay subprocess logs: Compose can interpolate arbitrary private values.
+	if action == "status" {
+		decoder := json.NewDecoder(strings.NewReader(output))
+		found := false
+		for {
+			var state struct {
+				State  string
+				Health string
+			}
+			err := decoder.Decode(&state)
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				return fmt.Errorf("cannot decode local service status")
+			}
+			switch state.State {
+			case "running", "exited", "created", "paused", "restarting", "removing", "dead":
+			default:
+				state.State = "unknown"
+			}
+			switch state.Health {
+			case "healthy", "unhealthy", "starting":
+			default:
+				state.Health = "not reported"
+			}
+			fmt.Fprintf(out, "PostgreSQL: %s; health: %s\n", state.State, state.Health)
+			found = true
+		}
+		if !found {
+			fmt.Fprintln(out, "PostgreSQL: not created")
+		}
+	}
 	switch action {
 	case "start":
 		fmt.Fprintln(out, "Local PostgreSQL is healthy. Next: basestack db migrate, then basestack api in another terminal.")

@@ -1,4 +1,4 @@
-// Package auth implements identity and credential operations, not authenticated sessions.
+// Package auth implements identities, credentials, challenges and opaque sessions.
 package auth
 
 import (

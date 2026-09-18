@@ -17,6 +17,7 @@ import (
 	runtimesource "github.com/Janon-Emersion-T/Basestack/internal/runtime"
 	"github.com/Janon-Emersion-T/Basestack/internal/runtime/auth"
 	"github.com/Janon-Emersion-T/Basestack/internal/runtime/config"
+	"github.com/Janon-Emersion-T/Basestack/internal/runtime/rbac"
 	"github.com/Janon-Emersion-T/Basestack/internal/strictjson"
 )
 
@@ -76,7 +77,10 @@ func Create(name string) error {
 	if err = os.WriteFile(filepath.Join(name, "basestack", "migrations", "000002_auth_core.sql"), []byte(auth.SchemaSQL), 0644); err != nil {
 		return err
 	}
-	services, err := json.MarshalIndent(config.Default(), "", "  ")
+	if err = os.WriteFile(filepath.Join(name, "basestack", "migrations", "000003_application_services.sql"), []byte(auth.SessionSchemaSQL+"\n"+rbac.SchemaSQL), 0644); err != nil {
+		return err
+	}
+	services, err := json.MarshalIndent(config.ApplicationDefault(), "", "  ")
 	if err != nil {
 		return err
 	}

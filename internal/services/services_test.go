@@ -38,6 +38,9 @@ func TestCommandsAndCredentials(t *testing.T) {
 		}
 		for _, e := range env {
 			if strings.HasPrefix(e, "BASESTACK_DB_PASSWORD=") {
+				if strings.Contains(joined, " ps ") {
+					return `{"State":"running","Health":"healthy","Command":"PRIVATE_SECRET"}`, nil
+				}
 				return e, nil
 			}
 		}
@@ -50,7 +53,7 @@ func TestCommandsAndCredentials(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if calls != 3 || !strings.Contains(out.String(), "[redacted]") {
+	if calls != 3 || strings.Contains(out.String(), "BASESTACK_DB_PASSWORD=") || strings.Contains(out.String(), "PRIVATE_SECRET") {
 		t.Fatal("command/redaction failed")
 	}
 	path := filepath.Join(dir, config.LocalEnv)

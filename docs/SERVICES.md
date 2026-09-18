@@ -1,191 +1,324 @@
-# Application services — BaseStack 0.3.1
+# Application services — BaseStack 0.3.2
 
-BaseStack now generates a local Go application runtime alongside its React frontend. It is a modular monolith: HTTP, PostgreSQL access and migrations share one runtime. Auth Core is included; sessions/tokens, RBAC, CRUD APIs, billing/licensing, AI, storage, realtime and deployment are not implemented.
+BaseStack owns a local-first Go application runtime, PostgreSQL migrations, Auth,
+RBAC, private storage and compiled server functions. It runs independently on
+machines, VPS servers and containers. There is no required BaaS or cloud vendor.
+Docker Compose is optional tooling for local PostgreSQL; use an external
+PostgreSQL connection without Docker. The frontend and API run independently.
 
 ## Local workflow
-
-Requirements: Go 1.23+, Node.js 22+, npm, Docker Engine/Desktop and Docker Compose v2 with `up --wait` support. Docker must be running and accessible to your user. Native Windows users can run CLI commands; the repository verification script uses Bash (CI runs on Linux).
 
 ```sh
 basestack init my-app
 cd my-app
 npm install
 cp .env.example .env
-# Uncomment BASESTACK_ENV=development and BASESTACK_AUTH_DELIVERY=local.
+# In .env, enable BASESTACK_ENV=development and BASESTACK_AUTH_DELIVERY=local.
 basestack services start
 basestack db migrate
-basestack api
-```
-
-Leave the API running, then open another terminal in the same project:
-
-```sh
+basestack api                   # foreground, leave this terminal open
+# Another terminal:
 basestack dev
-```
-
-The API defaults to `http://127.0.0.1:54321`, PostgreSQL to `127.0.0.1:54322`, and Vite normally uses `http://127.0.0.1:5173`. `dev` probes API health, reports whether it is healthy/unavailable/disabled, and continues the frontend when the API is unavailable. It does not start hidden background processes.
-
-```sh
+basestack services list
 basestack services status
-basestack db status
-basestack services stop
+basestack functions list
+basestack functions run hello
+basestack storage create-bucket files
+basestack storage buckets
+basestack services stop         # stops PostgreSQL; preserves its volume
 ```
 
-`services start` starts **local PostgreSQL only**, waits for its container health check, and preserves existing volumes. `api` runs the Go HTTP server in the foreground. Ctrl+C stops it gracefully. `services stop` stops PostgreSQL without deleting its volume or changing credentials; stop the API separately. `services status` reports container state; `db status` actually authenticates to the configured database and checks migration history.
-
-Each generated Compose project has a unique name. Ports are configurable but not automatically selected for normal development: if running multiple projects, give each one different API/database ports. The verification script chooses unused ports for its temporary project.
+Prerequisites: Go 1.23+, Node 22+, npm. Local PostgreSQL uses Docker Compose v2.
+API defaults to `127.0.0.1:54321`, PostgreSQL to `127.0.0.1:54322`. `dev` reports
+API health and runs Vite; it does not create background processes. Ctrl+C shuts
+services down gracefully. `services start/stop` manage the local database only;
+storage and functions run inside the API. `services list` reports configuration;
+`status` probes API health and reports local container state. `db status` checks
+actual database connectivity and migration history, including external databases.
+Local Compose status/start/stop need Docker even when the API uses an external DB.
 
 ## Configuration and compatibility decision
 
-**Composition schema v2 is unchanged.** No `services` property has been added to `basestack.json`; v2 still rejects that unknown field. Backend settings live in a separate, versioned `basestack/services.json`:
+Composition schema v2 in `basestack.json` is unchanged. Backend settings use a
+separate, strict `basestack/services.json` so private configuration cannot enter
+the browser's composition manifest:
 
 ```json
 {
-  "schemaVersion": 2,
-  "auth": {"enabled": true, "requireEmailVerification": true},
-  "database": {
-    "enabled": true,
-    "port": 54322
-  },
+  "schemaVersion": 3,
+  "database": {"provider": "postgresql", "enabled": true, "port": 54322},
   "api": {
-    "enabled": true,
-    "host": "127.0.0.1",
-    "port": 54321,
-    "corsOrigins": [
-      "http://localhost:5173",
-      "http://127.0.0.1:5173"
-    ]
-  }
+    "enabled": true, "host": "127.0.0.1", "port": 54321,
+    "corsOrigins": ["http://localhost:5173", "http://127.0.0.1:5173"]
+  },
+  "auth": {"enabled": true, "requireEmailVerification": true},
+  "authorization": {"enabled": true},
+  "storage": {"enabled": true, "provider": "local", "maxObjectBytes": 10485760},
+  "functions": {"enabled": true}
 }
 ```
 
-This sidecar extends the project configuration without changing the strict public composition contract or bundling backend settings into browser assets. Service schema versioning can evolve separately from pages/components. The CLI and a future Studio should edit this same service file, not introduce a separate private model.
+All displayed fields are required for v3. Unknown/case-mismatched/duplicate
+fields, null required values and unsupported providers fail validation. Ports
+are 1–65535; host must be an IP address or localhost. CORS origins are unique
+HTTP(S) origins with no credentials, paths or wildcards. An empty array disables
+cross-origin access. Auth requires the database; authorization requires Auth.
+Storage limits are 1 byte–1 GiB. Disabling a service preserves its data.
 
-Services v1 remains supported with no `auth` field (even `auth: null` is rejected). In services v2 every displayed field is required; enabled Auth requires the database. Enabled values are booleans; ports are integers from 1 to 65535; host is an IP address or `localhost`; origins are unique explicit HTTP(S) origins without paths, credentials or wildcards. `corsOrigins: []` disables cross-origin access. Unknown/case-mismatched fields, duplicate keys, missing values and unsupported versions fail validation. `basestack check` validates the service file when it exists, as well as the composition manifest.
+Services v1 still provides database/API settings without Auth. Services v2 keeps
+Auth Core's credential-only login contract. New service fields require v3;
+merely installing the CLI does not rewrite generated source or change sessions.
+Projects without a sidecar remain frontend-only and keep their existing commands.
+`basestack check` validates the sidecar if present.
 
-Old v2 projects without this file remain frontend-only and retain all composition commands. Service commands fail with an upgrade message. To adopt services, generate a new 0.3 project in a different directory and review/copy `cmd/server`, `internal/runtime`, `internal/strictjson`, `go.mod`, `go.sum`, `compose.yaml`, `.env.example` and `basestack/` into the old project. Merge `.gitignore`; keep the old `basestack.json` and frontend source. Do not overwrite existing Go modules or source blindly. No automatic source upgrade is performed.
+To adopt services, generate a separate project and review/merge its Go source,
+module files, Compose file, `.env.example`, `.gitignore`, service sidecar and SQL.
+For v1/v2 service upgrades, preserve **every existing migration byte**. Copy the
+new `auth/sessions.sql` and `rbac/schema.sql` into the next unused migration;
+copy `auth/schema.sql` first if upgrading from a project without Auth. Do not
+renumber existing SQL. Merge the frontend client files only if wanted. Never
+blindly overwrite a customized renderer, Go module or runtime.
 
-## Environment and credentials
+## Environments and secrets
 
-Generated source contains **no usable database password** and no `.env` file. The first `services start` creates a random 256-bit password in ignored `.basestack/local.env` with mode `0600` (directory `0700`). It never replaces existing credentials. The local URL is derived from this password, the database port, user `basestack` and database `basestack`.
+```sh
+basestack env list
+basestack env show development
+basestack env set development BASESTACK_DATABASE_URL < /private/path/database-url
+basestack env unset development BASESTACK_DATABASE_URL
+BASESTACK_ENV=test basestack db status
+```
 
-Environment precedence, highest first:
+Supported profiles are `development`, `test`, `production`. Selection uses the
+process `BASESTACK_ENV`, then dotenv selection, then **production**. Profiles
+cannot override their own selection. Precedence, highest first:
 
-1. Process environment.
-2. Project `.env`, if present.
-3. `.basestack/local.env`, if present.
-4. Public service settings/default local URL derivation.
+1. Process environment (an empty value is an explicit override).
+2. Selected `.basestack/environments/<name>.json` profile.
+3. `.env`.
+4. `.basestack/local.env`.
+5. Public settings and defaults.
 
-Copy `.env.example` to `.env` and uncomment only the overrides you need. Both files above are parsed as literal `KEY=value`, with optional surrounding quotes and whole-line comments. There is **no shell expansion**, `export` syntax, variable interpolation or inline-comment processing. Duplicate keys within a file are rejected. Empty process variables are explicit overrides, not ignored. The loader does not mutate process-wide environment state.
+Profiles have private schema v1: `schemaVersion` and a string-valued `values`
+object. Writes use 0600 temporary files, atomic replacement and an exclusive
+per-profile lock; directories require 0700. Symlinks, unsafe permissions, invalid
+keys, NUL values, oversized profiles and duplicates are rejected. `env show`
+displays sorted stored keys with **every value redacted**, and never enumerates
+the process environment. `env set` reads stdin, refusing terminal echo; one final
+newline is removed. Do not put secrets in shell arguments or command history.
+`VITE_*` profile keys are rejected. CLI updates the project ignore file before
+writing private state, including on older projects. After an interrupted write,
+inspect the profile's `.lock` file before removing a stale lock.
+
+`config.SecretStore`, injected through `app.Options.Secrets`, is the future encrypted-provider boundary. The current
+store is private plaintext, not encrypted. The loader does not modify global
+process variables. Dotenv files retain literal `KEY=value` semantics with
+optional enclosing quotes and whole-line comments; no expansion, export syntax
+or inline-comment interpretation. Keep private state out of published artifacts
+and backups intended for sharing. Never force-add it to Git.
 
 | Variable | Purpose |
 | --- | --- |
-| `BASESTACK_DATABASE_URL` | Explicit PostgreSQL URL/pgx connection string; overrides local URL derivation |
-| `BASESTACK_API_HOST` | Bind address; defaults to service config's loopback host |
-| `BASESTACK_API_PORT` | API port; defaults to service config |
-| `BASESTACK_DATABASE_PORT` | Local Compose host port and derived URL port |
+| `BASESTACK_ENV` | Select development, test or production |
+| `BASESTACK_DATABASE_URL` | Explicit PostgreSQL DSN; externally managed DBs need no Docker |
+| `BASESTACK_DB_PASSWORD` | Automatically generated local Compose credential |
+| `BASESTACK_DATABASE_PORT` | Local DB port override |
+| `BASESTACK_API_HOST`, `BASESTACK_API_PORT` | API binding overrides |
 | `BASESTACK_CORS_ORIGINS` | Comma-separated explicit origins; empty disables CORS |
-| `BASESTACK_DB_PASSWORD` | Local Compose password, normally generated automatically |
-| `BASESTACK_TEST_DATABASE_URL` | Opt-in integration-test URL for a disposable server with CREATEDB permission |
+| `BASESTACK_AUTH_DELIVERY` | `none`, `local`, `external`; local requires explicit development |
+| `BASESTACK_FUNCTION_TOKEN` | Optional bearer session for a private CLI function run |
+| `BASESTACK_TEST_DATABASE_URL` | Disposable integration server with CREATEDB permission |
 
-Never put a database URL/password in `basestack.json`, `basestack/services.json`, `VITE_*` variables or committed files. The React bundle does not import service settings or private environment files. An external PostgreSQL server only requires `BASESTACK_DATABASE_URL`; Docker is optional in that workflow. `services start` always manages the local Compose database, even if the API URL points to an external server.
+See [Auth](AUTH.md) for password and challenge settings. Test mode supports an
+injected delivery provider; it deliberately does not enable development outbox
+files. Enabled Auth requires a delivery provider even if verification is disabled.
 
-The generated local URL explicitly disables TLS for the loopback development container. Configure TLS verification in the URL for remote databases. Container administrators can inspect container environment; this is a local-development credential approach, not a production secret manager. PostgreSQL's image uses its password setting when initializing a **new** data directory; editing/deleting the local credential file does not change passwords already stored in a volume.
+The first local service start creates a random 256-bit password in
+`.basestack/local.env`; it never replaces an existing password or volume. Local
+credentials remain fallback values for compatibility, so inject an explicit
+production DSN rather than relying on a developer machine's files. Changing a
+credential file does not rotate the password of an initialized PostgreSQL volume.
+Profiles select configuration; they do not create isolated databases or Compose
+volumes. Use distinct database URLs for development, test and production.
+Remote connections should use PostgreSQL TLS verification. Container administrators
+can inspect container environment. Compose's raw output is never relayed by the CLI.
 
-## PostgreSQL belongs to the application owner
+## Database and migrations
 
-The runtime exposes a normal `*pgxpool.Pool`. It does not impose a proprietary query language or database API. Use parameterized, context-aware queries directly from your Go code. The pool currently has a maximum of 10 connections, five-second startup connectivity timeout, five-minute idle lifetime and one-hour maximum lifetime. Source owners can change these policies.
-
-Use ordinary PostgreSQL SQL, `psql`, `pg_dump`, backups and external tooling. The Compose file is inspectable. Without the CLI, the default local configuration can be operated with:
+PostgreSQL is ordinary PostgreSQL: use SQL, pgx, psql, pg_dump and standard backups.
+No ORM or public raw-SQL endpoint is introduced. The database provider boundary
+is `migrations.Provider`/`Service`; it owns connection, health, migration semantics
+and close. The bundled implementation exposes its pgx pool to PostgreSQL-specific
+Auth/RBAC. A different database provider must also replace those repositories;
+changing a provider name alone cannot translate PostgreSQL SQL.
 
 ```sh
-docker compose --env-file .basestack/local.env up -d --wait postgres
-docker compose --env-file .basestack/local.env ps --all
-docker compose --env-file .basestack/local.env exec postgres psql -U basestack -d basestack
-docker compose --env-file .basestack/local.env stop postgres
-```
-
-Supply the same port/environment overrides if using them; Compose's own environment interpolation rules apply to direct Docker commands. Ordinary host-side PostgreSQL clients require their normal connection settings, environment or `.pgpass`; BaseStack does not modify them.
-
-## SQL migrations
-
-```sh
-basestack migration new create_example
-# Edit basestack/migrations/000003_create_example.sql before applying it.
+basestack db create-migration create_notes
+# Edit basestack/migrations/000004_create_notes.sql in a fresh project.
+# The existing alias, basestack migration new create_notes, still works.
 basestack db status
 basestack db migrate
+basestack db rollback
 ```
 
-Files use a six-digit positive sequence and lowercase underscore name, for example `000003_create_example.sql`. The CLI refuses duplicate names, duplicate versions, unsafe names, symlinked migration files and invalid SQL filenames. Creation uses an exclusive lock and exclusive file creation; it never overwrites an existing migration. After a crash, inspect `.create.lock` inside the migrations directory before manually removing a stale creation lock.
+SQL names use six-digit positive sequences and lowercase underscore names.
+Discovery rejects duplicate versions/names, malformed SQL filenames and symlinks.
+Applied version, name and SHA-256 checksums are stored in
+`basestack_internal.schema_migrations`. A PostgreSQL transaction advisory lock
+serializes migration, rollback and status runners. A pending batch and its
+metadata commit together or roll back together. Status never creates metadata.
+Applied history must match a prefix of the local files exactly. Creation uses an
+exclusive lock/file and never overwrites historical SQL.
 
-The initial `000001_initial.sql` is an intentional empty baseline. `000002_auth_core.sql` creates `basestack_auth.users`, `challenges` and `events`; see [Auth](AUTH.md). The runner bootstraps only `basestack_internal.schema_migrations`, containing version, filename, SHA-256 checksum and application timestamp.
+For explicit rollback, write a companion such as
+`000004_create_notes.down.sql` **before applying** its forward file:
 
-Rules:
-
-- Discover and apply migrations in ascending version order.
-- Acquire a transaction-scoped PostgreSQL advisory lock to serialize migration/status runners in the same database.
-- Run the whole pending batch and insert its metadata in **one transaction**. On failure, all pending changes and their metadata roll back; previously applied batches remain intact.
-- Record exact file-byte checksums. Changed content, renames, missing applied files or inserted historical versions cause an integrity error.
-- Already-applied migrations are not rerun. `db status` does not create the metadata schema/table.
-- Do not edit applied files, including formatting/line endings. Add a new forward migration to change the database. Failed/unapplied SQL may be corrected before retrying.
-- Do not include `BEGIN`, `COMMIT`, `ROLLBACK`, savepoints or other transaction-control statements. PL/pgSQL function bodies can still contain their own blocks. The SQL files are trusted owner-written code, not sandboxed input.
-- Nontransactional operations such as `CREATE INDEX CONCURRENTLY` are not supported by this workflow. There is no automatic down/reset/drop command or nontransactional opt-out.
-- CLI/runtime migration operations have a five-minute deadline. Long migrations need a deliberate policy/source change.
-
-Database errors report an operation and SQLSTATE where available, with driver details omitted to prevent values, SQL or connection credentials from leaking. Inspect your SQL and use standard PostgreSQL diagnostics when deeper details are needed.
-
-## API and security baseline
-
-`GET /api/health` checks the live pool using the request context and a two-second deadline:
-
-```json
-{"status":"ok","service":"basestack","version":"0.3.1","database":"connected"}
+```sql
+-- 000004_create_notes.sql
+CREATE TABLE notes (id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY, body text NOT NULL);
 ```
 
-If the database becomes unavailable, health returns HTTP 503 with `status: "error"` and `database: "unavailable"`. If database support is explicitly disabled, it reports `database: "disabled"`. Enabled database connections must succeed **before** the API listens. API startup does not apply migrations automatically.
+```sql
+-- 000004_create_notes.down.sql
+DROP TABLE notes;
+```
 
-Unknown routes and unsupported methods have structured JSON errors. The server sets read/header/write/idle limits, caps request headers, returns no-store/nosniff/frame/referrer/CSP headers, and provides a bounded ten-second shutdown. Context cancellation reaches database calls; the pool closes after the HTTP server stops.
+Rollback executes only the latest applied migration's recorded down SQL and
+removes its history row in one transaction. Down SQL is checksummed too; adding
+or changing it after application is rejected. A migration without down SQL
+cannot be rolled back by the CLI. The shipped identity migrations deliberately
+have no down files. Rollback runs owner-written SQL and can destroy data;
+review it and maintain backups. It is not automatic disaster recovery.
 
-CORS matches only configured origins. It does not emit wildcard or credentialed access. Health permits GET; enabled Auth routes permit POST and matching preflights with Content-Type. If Vite chooses another port, update the allowed origin for browser API calls. CLI health probes do not send an Origin header. CORS is not authentication and does not restrict non-browser clients.
+Both directions forbid transaction-control statements. Function-body PL/pgSQL
+blocks are supported; `CREATE INDEX CONCURRENTLY` is not supported inside this
+transactional workflow. Migration operations have a five-minute deadline. Driver
+errors omit credentials, SQL and data; safe SQLSTATE categories remain visible.
 
-The default HTTP host and published PostgreSQL port are loopback-only. Explicitly binding the API elsewhere makes an unauthenticated API reachable there. This baseline is not a complete security layer; credential verification is implemented, but sessions, tokens and permissions remain deferred. Future middleware belongs at the HTTP boundary in the same Go runtime.
+## Auth and authorization
 
-## Ownership and independent commands
+See [Auth](AUTH.md) for signup, challenge delivery and the session contract.
+New v3 projects have opaque bearer sessions, `POST /api/auth/logout` and
+`GET /api/auth/me`. Sessions expire after 12 hours; password changes/resets and
+account suspension invalidate them. The browser client keeps tokens in memory.
 
-`basestack api` and `basestack db` compile and run the **generated project's** source, so your runtime edits take effect. They do not use a hidden BaseStack server or silently replace that source. Go may download pinned public dependencies on the first build.
-
-You can work without the CLI:
+RBAC has users, named roles and exact permissions. `admin` and `member` are
+initial empty roles; neither has implicit bypass privileges. Grant deliberately:
 
 ```sh
-go run ./cmd/server status
-go run ./cmd/server migrate
-go run ./cmd/server serve
-go test ./...
-npm run dev
-npm test
-npm run build
+basestack roles create editor
+basestack roles grant editor profile.read
+basestack roles grant editor storage.files.read
+basestack roles grant editor storage.files.write
+basestack roles assign <user-uuid> editor
+basestack roles check <user-uuid> profile.read
+basestack roles revoke editor storage.files.write
+basestack roles unassign <user-uuid> editor
 ```
 
-These commands run from the project root and use the same service/environment files. Rename the generated `example.com/my-app` Go module if desired. `go.mod`, `go.sum`, SQL, Compose and source all belong to you.
+Roles and grants persist in PostgreSQL. Checks read current assignments and active
+user state; revocation has no stale cache. `rbac.Authorizer.Check` is also usable
+inside server handlers. Management commands are **trusted operator operations**
+with database credentials; there is no public role-management HTTP endpoint.
+No user can self-assign roles. Organizations, tenants, role inheritance, wildcard
+permissions and row-level policies are future work.
 
-## Troubleshooting
+## Private local storage
 
-- **Docker unavailable:** start Docker Engine/Desktop, check user permissions, and confirm `docker compose version`. No containers are needed for an externally managed PostgreSQL server.
-- **Port already in use:** set a free `BASESTACK_DATABASE_PORT` or `BASESTACK_API_PORT`. Restart the relevant process/container.
-- **Database unavailable:** inspect `services status`, then `db status`; verify host, port, database, role, password and TLS requirements privately. No failed connection is treated as healthy.
-- **Password changed/lost:** restore `.basestack/local.env` or use PostgreSQL's normal credential-management process. Restarting Compose does not rotate credentials in an existing volume. BaseStack never resets the volume to resolve this.
-- **Migration integrity error:** restore the applied historical files from version control; create a new migration for the intended change. Do not alter metadata to hide a mismatch.
-- **SQL failure:** the pending batch was rolled back. Correct unapplied SQL and retry; the SQLSTATE identifies the PostgreSQL error class.
-- **Services file absent:** this is a frontend-only 0.2 project; follow the reviewed source-upgrade steps above.
+```sh
+basestack storage create-bucket files
+basestack storage put files < ./document.pdf
+# put returns generated ID, byte size and modification time.
+basestack storage list files
+basestack storage get files <object-id> > ./download.pdf
+basestack storage delete files <object-id>
+```
 
-## Verification
+`storage.Store` supports bucket creation/listing and object upload/list/read/delete
+with metadata. The local provider writes under `.basestack/storage/<bucket>/`.
+Buckets are validated names; objects have random 256-bit hexadecimal IDs. A
+caller-supplied filename never becomes a path. Complete uploads publish atomically
+with exclusive links; failures/oversized uploads remove temporary bytes. Files
+are 0600, directories 0700. Symlinks and traversal are rejected. Applications
+can inject another store via `app.Options.Storage`, without changing HTTP clients.
 
-Run `scripts/verify-generated.sh` from the repository to create a disposable project, start its own PostgreSQL, execute root/generated Go tests (including integration and race tests), vet, frontend tests/typechecking/build, live health/CORS checks, frontend startup, migration idempotence and stop/start persistence. It stops its processes and database on exit and retains local volumes; it never resets an existing project.
+HTTP uses `/api/storage/<bucket>` for GET listing and POST raw-byte upload;
+`/api/storage/<bucket>/<id>` supports GET and DELETE. Every HTTP request needs a
+session and the exact `storage.<bucket>.read` or `.write` grant. Downloads are
+attachments with octet-stream content and nosniff. Bucket creation remains a
+trusted CLI/server operation. There are no public buckets, signed URLs, multipart
+uploads, custom metadata fields or S3 integration yet. Local metadata contains
+ID/size/modification time; original filenames are deliberately not stored.
 
-Without `BASESTACK_TEST_DATABASE_URL`, ordinary Go tests skip real-database migration and Auth tests. With it, integration tests create randomly named databases on the supplied disposable server and remove only those databases afterward. CI uses the full script with random private credentials and publishes only the CLI and frontend build artifacts.
+The local filesystem belongs to the application owner. Checks defend against
+untrusted API paths and existing symlinks, not a hostile OS user concurrently
+replacing the owner's directories. Use a private owned volume. Native Windows
+permission/hard-link behavior is not runtime-verified; unsupported filesystems
+fail cleanly. Reads/listings and trusted function code are not an OS sandbox.
 
-## Auth configuration and upgrades
+## Compiled server functions
 
-Fresh projects enable Auth and require email verification. Runtime defaults to production mode; local delivery requires both explicit development settings in `.env`. `basestack auth status` reports configuration without secrets. [Auth documentation](AUTH.md) lists all security settings, provider wiring, endpoints and limitations.
+```sh
+basestack functions list
+basestack functions inspect hello
+basestack functions run hello
+printf '{"example":true}' | basestack functions run hello
+```
 
-For a 0.3.0 source upgrade, preserve every existing migration byte. Merge the new runtime/dependencies and service schema v2 deliberately. Copy `internal/runtime/auth/schema.sql` into the **next unused** migration sequence if `000002` is already occupied; never overwrite or renumber applied history. Disabling Auth removes its HTTP routes, not stored accounts or migrations.
+Edit `internal/runtime/functions/example.go` in your generated application, or
+supply definitions via `app.Options.Functions` in `cmd/server/main.go`. Definitions
+are compiled Go with validated unique names, visibility and permission metadata.
+`hello` is explicitly public; `whoami` requires `profile.read`. Discovery is a
+sorted view of this compiled registry. No arbitrary shell scripts are executed.
+
+Each handler receives a cancellation/deadline context, JSON body, verified user
+(for private functions), and a private environment lookup. It returns a JSON
+value or an error. Errors and panics produce generic responses without exposing
+provider details. Input/output JSON are bounded to 1 MiB; request contexts have
+an eight-second deadline. Trusted functions must honor cancellation; CPU-bound
+code is not forcibly terminated or isolated. Handlers can capture application
+providers in Go closures. Never return an environment value intended to stay secret.
+
+POST `/api/functions/<name>` runs the same registry. Private functions require a
+session and an exact permission. CLI execution runs generated code locally and
+uses optional `BASESTACK_FUNCTION_TOKEN`, never a token CLI argument. Enabled
+runtime dependencies must be available; list/inspect do not connect to the DB.
+Function stdout is intentional application output, so function authors own its
+privacy. Scheduler, queues, remote builds and serverless hosting are out of scope.
+
+## Frontend client
+
+`src/services.json` is an explicitly public schema v1 configuration containing
+only `apiURL`; it imports no backend settings. Its schemaVersion is also required.
+Use an HTTP(S) origin or `""` for same-origin hosting. Change it if your API port
+changes. URLs with credentials, paths, queries or fragments are rejected.
+
+```ts
+import { base } from './services';
+await base.auth.login(email, password);
+const current = await base.auth.current();
+const response = await base.functions.run('hello', {});
+const uploaded = await base.storage.upload('files', new Blob(['hello']));
+await base.auth.logout();
+```
+
+The typed client also provides signup, verification/reset helpers and storage
+listing/download/delete. Bearer tokens stay in closure memory, with no cookies,
+localStorage or sessionStorage; reload requires login. Requests refuse redirects
+and omit ambient cookies. Errors expose only HTTP status, never server error
+bodies. There is deliberately no `base.db.query` or public CRUD abstraction yet.
+Existing composition rendering makes no service calls until application code
+imports and uses this client.
+
+## Verification and limits
+
+`scripts/verify-generated.sh` exercises root/generated Go tests, race tests, vet,
+real PostgreSQL migration/rollback/Auth/session/RBAC behavior, environment and
+storage/function CLI workflows, live HTTP, frontend-only compatibility, frontend
+tests/typecheck/build, shutdown and database persistence. CI runs the same script.
+Without `BASESTACK_TEST_DATABASE_URL`, Go tests explicitly skip database integration.
+
+TLS termination, backups, encrypted secret providers, email delivery, upload malware
+scanning and deployment remain operator concerns. Auth abuse controls are local to
+one process. There is no refresh-token rotation, multi-tenant policy, ORM, cloud
+provider, realtime system or Studio in this release. See [architecture](ARCHITECTURE.md).

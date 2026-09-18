@@ -1,6 +1,6 @@
 # Composition configuration — schema v2
 
-BaseStack 0.3.1 preserves this schema unchanged. Backend settings are separately versioned in `basestack/services.json` (services schema v2; legacy v1 remains supported without Auth); see [application services](SERVICES.md). Adding `services` to this v2 manifest is still an unknown-field error. Existing projects without the service file stay frontend-only.
+BaseStack 0.3.2 preserves this schema unchanged. Backend settings are separately versioned in `basestack/services.json` (services schema v3; legacy v1/v2 remain supported); see [application services](SERVICES.md). Adding `services` to this v2 manifest is still an unknown-field error. Existing projects without the service file stay frontend-only.
 
 `basestack.json` is the shared application model for the CLI, generated renderer and future Studio. No separate editor-only model is planned. All content is public frontend data; do not put secrets in this file.
 

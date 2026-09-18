@@ -164,3 +164,59 @@ func TestPostgreSQLMigrationLifecycle(t *testing.T) {
 		t.Fatal("health against real PostgreSQL failed")
 	}
 }
+
+func TestPostgreSQLRollback(t *testing.T) {
+	pool := integrationPool(t)
+	ctx := context.Background()
+	dir := t.TempDir()
+	sqlFile(t, dir, "000001_example.sql", "CREATE TABLE rollback_example(id integer);")
+	sqlFile(t, dir, "000001_example.down.sql", "DROP TABLE rollback_example;")
+	if _, err := Run(ctx, pool, dir, true); err != nil {
+		t.Fatal(err)
+	}
+	// Historical down SQL is checksummed too; mutation cannot silently change rollback.
+	sqlFile(t, dir, "000001_example.down.sql", "DROP TABLE rollback_example; -- changed")
+	if _, err := Rollback(ctx, pool, dir); err == nil {
+		t.Fatal("changed down migration accepted")
+	}
+	sqlFile(t, dir, "000001_example.down.sql", "DROP TABLE rollback_example;")
+	states, err := Rollback(ctx, pool, dir)
+	if err != nil || states[0].Applied {
+		t.Fatal("rollback failed", err)
+	}
+	if _, err := Rollback(ctx, pool, dir); err == nil {
+		t.Fatal("empty history rollback accepted")
+	}
+	if _, err := Run(ctx, pool, dir, true); err != nil {
+		t.Fatal("reapply failed", err)
+	}
+	sqlFile(t, dir, "000002_irreversible.sql", "SELECT 1;")
+	if _, err := Run(ctx, pool, dir, true); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Rollback(ctx, pool, dir); err == nil {
+		t.Fatal("rollback without down SQL accepted")
+	}
+}
+
+func TestPostgreSQLFailedRollbackIsAtomic(t *testing.T) {
+	pool := integrationPool(t)
+	ctx := context.Background()
+	dir := t.TempDir()
+	sqlFile(t, dir, "000001_example.sql", "CREATE TABLE rollback_atomic(id integer); INSERT INTO rollback_atomic VALUES(1);")
+	sqlFile(t, dir, "000001_example.down.sql", "DELETE FROM rollback_atomic; SELECT * FROM no_such_table;")
+	if _, err := Run(ctx, pool, dir, true); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Rollback(ctx, pool, dir); err == nil {
+		t.Fatal("bad rollback succeeded")
+	}
+	var count int
+	if err := pool.QueryRow(ctx, "SELECT count(*) FROM rollback_atomic").Scan(&count); err != nil || count != 1 {
+		t.Fatal("failed rollback mutated data")
+	}
+	states, err := Run(ctx, pool, dir, false)
+	if err != nil || !states[0].Applied {
+		t.Fatal("failed rollback mutated history")
+	}
+}

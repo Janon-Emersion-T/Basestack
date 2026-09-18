@@ -11,8 +11,13 @@ import (
 
 var envKey = regexp.MustCompile(`^[A-Z][A-Z0-9_]*$`)
 
-// Environment does not mutate os.Environ. Process variables override .env, which overrides local.env.
+// Environment does not mutate os.Environ. Process > named profile > .env > local.env.
 func Environment(dir string) (map[string]string, error) {
+	return EnvironmentWithStore(dir, nil)
+}
+
+// EnvironmentWithStore supports encrypted/external stores without changing consumers.
+func EnvironmentWithStore(dir string, store SecretStore) (map[string]string, error) {
 	values := map[string]string{}
 	for _, path := range []string{LocalEnv, ".env"} {
 		f, err := os.Open(filepath.Join(dir, path))
@@ -53,6 +58,29 @@ func Environment(dir string) (map[string]string, error) {
 		if err != nil {
 			return nil, fmt.Errorf("cannot parse %s", path)
 		}
+	}
+	name := "production"
+	if v, ok := values["BASESTACK_ENV"]; ok {
+		name = v
+	}
+	if v, ok := os.LookupEnv("BASESTACK_ENV"); ok {
+		name = v
+	}
+	if !ValidEnvironment(name) {
+		return nil, ErrProfile
+	}
+	if store == nil {
+		store = FileSecrets{Dir: dir}
+	}
+	secrets, err := store.Read(name)
+	if err != nil {
+		return nil, fmt.Errorf("cannot load private environment profile")
+	}
+	for key, value := range secrets {
+		if !validPrivateKey(key) || !validSecret(value) {
+			return nil, ErrProfile
+		}
+		values[key] = value
 	}
 	for _, entry := range os.Environ() {
 		key, value, ok := strings.Cut(entry, "=")

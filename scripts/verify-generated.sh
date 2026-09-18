@@ -29,10 +29,15 @@ export BASESTACK_TEST_DATABASE_URL="$(node -e 'const fs=require("node:fs");const
 "$cli" db status
 "$cli" db migrate
 "$cli" migration new create_smoke_example
-cat > basestack/migrations/000003_create_smoke_example.sql <<'SQL'
+cat > basestack/migrations/000004_create_smoke_example.sql <<'SQL'
 CREATE TABLE smoke_example (id integer PRIMARY KEY);
 INSERT INTO smoke_example VALUES (1);
 SQL
+cat > basestack/migrations/000004_create_smoke_example.down.sql <<'SQL'
+DROP TABLE smoke_example;
+SQL
+"$cli" db migrate
+"$cli" db rollback
 "$cli" db migrate
 "$cli" db migrate
 "$cli" services status
@@ -68,7 +73,7 @@ import assert from 'node:assert/strict';
 const url=`http://127.0.0.1:${process.env.BASESTACK_API_PORT}/api/health`;
 let ready=false;
 for(let i=0;i<100;i++) {
-  try {const r=await fetch(url);const h=await r.json();if(r.status===200&&h.status==='ok'&&h.service==='basestack'&&h.version==='0.3.1'&&h.database==='connected'){ready=true;break}} catch {}
+  try {const r=await fetch(url);const h=await r.json();if(r.status===200&&h.status==='ok'&&h.service==='basestack'&&h.version==='0.3.2'&&h.database==='connected'){ready=true;break}} catch {}
   await new Promise(resolve=>setTimeout(resolve,100));
 }
 assert.ok(ready,'API did not become healthy');
@@ -93,6 +98,7 @@ assert.ok(ready,'Frontend did not become ready with API status');
 console.log('Frontend dev server and API status checks passed.');
 JS
 node "$repo_dir/scripts/verify-auth.mjs"
+BASESTACK_VERIFY_CLI="$cli" node "$repo_dir/scripts/verify-services.mjs"
 kill "$frontend_pid"; wait "$frontend_pid"; frontend_pid=""
 kill "$api_pid"; wait "$api_pid"; api_pid=""
 "$cli" services stop

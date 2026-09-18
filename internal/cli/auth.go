@@ -26,6 +26,10 @@ func authCommand(args []string, out io.Writer) error {
 			fmt.Fprintln(out, "An external delivery provider must be wired into the generated runtime before serving Auth.")
 		}
 	}
-	fmt.Fprintln(out, "Credential verification only; no sessions or access tokens are issued.")
+	if c.Services.SchemaVersion >= 3 {
+		fmt.Fprintln(out, "Sessions: opaque bearer tokens, 12-hour expiry; logout and current-user routes enabled with Auth.")
+	} else {
+		fmt.Fprintln(out, "Credential verification only; no sessions or access tokens are issued.")
+	}
 	return nil
 }

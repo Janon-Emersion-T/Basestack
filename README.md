@@ -2,7 +2,7 @@
 
 **Build applications from reusable building blocks. No AI required.**
 
-BaseStack helps customers and developers assemble real applications using a CLI, configuration and editable components. **0.3.1 — Auth Core** adds email/password accounts, verification and password reset to the editable Go runtime, PostgreSQL, SQL migrations and local Docker services to the existing React + TypeScript Composition Engine. Multiple pages, six component types, twelve variants and three themes remain available. A future visual Studio will use the same versioned application schema.
+BaseStack helps customers and developers assemble real applications using a CLI, configuration and editable components. **0.3.2 — Application Services** adds named environments, authenticated sessions, RBAC, local bucket storage, server functions and a browser client to the editable Go runtime, PostgreSQL, SQL migrations and optional local Docker services to the existing React + TypeScript Composition Engine. Multiple pages, six component types, twelve variants and three themes remain available. A future visual Studio will use the same versioned application schema.
 
 No account, AI subscription, BaseStack server or payment is required for local development. There is no AI functionality.
 
@@ -59,12 +59,19 @@ basestack api                       # Foreground Go API; leave running in anothe
 basestack dev                       # Frontend; reports API health
 basestack services status
 basestack auth status
+basestack services list
+basestack env list
+basestack env show development
+basestack functions list
+basestack functions run hello
+basestack storage create-bucket files
+basestack storage buckets
 basestack services stop             # Preserve database volume
 ```
 
-The API health endpoint is `http://127.0.0.1:54321/api/health`; local PostgreSQL uses port `54322`. Auth provides signup, credential verification, email verification and password reset; login does not issue a session. CRUD is deferred. PostgreSQL remains ordinary PostgreSQL: use SQL, pgx, psql, pg_dump and your preferred database tools.
+The API health endpoint is `http://127.0.0.1:54321/api/health`; local PostgreSQL uses port `54322`. Auth provides signup, credential verification, email verification and password reset; schema v3 login issues an opaque bearer session, with logout and current-user retrieval. RBAC protects storage and private functions. CRUD is deferred. PostgreSQL remains ordinary PostgreSQL: use SQL, pgx, psql, pg_dump and your preferred database tools.
 
-Composition schema v2 remains unchanged. Public backend settings use a separate `basestack/services.json` schema v2 (legacy services v1 remains supported with Auth absent). Environment overrides use `.env`; local credentials live in ignored `.basestack/local.env`. Neither is committed or imported into the frontend. Existing v2 projects without services retain their frontend workflow.
+Composition schema v2 remains unchanged. Public backend settings use a separate `basestack/services.json` schema v3 (legacy services v1/v2 remain supported). Private environment profiles live in ignored `.basestack/environments/`; `.env` and injected process values also remain supported. The frontend imports only explicit public `src/services.json` settings. Existing v2 projects without services retain their frontend workflow.
 
 Read the [services guide](docs/SERVICES.md) for configuration, local/external PostgreSQL, migration guarantees, ownership, security and troubleshooting.
 
@@ -106,7 +113,7 @@ Generated applications work independently with `npm run dev`, `npm test`, `npm r
 
 Build output is in `dist/`. URL routing uses normal links with full page loads. A static host must serve `index.html` for application paths such as `/about`; hosting configuration and deployment automation are not implemented. Applications currently assume hosting at the domain root.
 
-Replace sample content and email addresses before publishing. Pricing is presentational and contact uses `mailto:`. Sessions/tokens, RBAC, CRUD APIs, billing, licensing, storage, realtime, deployment and Studio are **not implemented**.
+Replace sample content and email addresses before publishing. Pricing is presentational and contact uses `mailto:`. CRUD APIs, billing, licensing, realtime, deployment and Studio are **not implemented**.
 
 **Existing 0.1 projects:** schema v1 is rejected explicitly. Automatic migration is deferred to avoid replacing customized frontend source. See the [manual upgrade guide](docs/CONFIGURATION.md#upgrading-a-schema-v1-project).
 

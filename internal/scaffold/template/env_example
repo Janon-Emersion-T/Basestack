@@ -8,6 +8,9 @@
 # BASESTACK_DATABASE_PORT=54322
 # BASESTACK_CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
 # Values are literal; no shell expansion. Process environment overrides these files.
+# Named private profiles override .env; manage them with basestack env.
+# BASESTACK_ENV supports development, test and production (the default).
+# Test mode requires an injected delivery provider; it does not allow a local outbox.
 
 # Auth defaults to production and requires an injected delivery provider.
 # For private local development ONLY, uncomment BOTH:
