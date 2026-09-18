@@ -131,7 +131,7 @@ func TestFrontendCommands(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, command := range []string{"dev", "build"} {
-		if got := run(t, command); got != "run "+command {
+		if got := run(t, command); !strings.HasSuffix(got, "run "+command) {
 			t.Fatalf("wrong npm invocation: %q", got)
 		}
 	}

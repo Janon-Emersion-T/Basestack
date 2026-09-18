@@ -1,0 +1,23 @@
+# Copy to .env for overrides. Never commit .env or .basestack/local.env.
+# services start creates a random local password in .basestack/local.env.
+# The runtime derives its local database URL from that password and database port.
+# For an existing PostgreSQL server, supply its URL privately (no BaseStack dependency).
+# BASESTACK_DATABASE_URL=postgres://USER:PASSWORD@HOST:5432/DATABASE?sslmode=verify-full
+# BASESTACK_API_HOST=127.0.0.1
+# BASESTACK_API_PORT=54321
+# BASESTACK_DATABASE_PORT=54322
+# BASESTACK_CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
+# Values are literal; no shell expansion. Process environment overrides these files.
+
+# Auth defaults to production and requires an injected delivery provider.
+# For private local development ONLY, uncomment BOTH:
+# BASESTACK_ENV=development
+# BASESTACK_AUTH_DELIVERY=local
+# Production providers implement auth.Delivery and use app.RunWithDelivery.
+# BASESTACK_AUTH_DELIVERY=external
+# Argon2id defaults; bounds are enforced (memory is KiB).
+# BASESTACK_AUTH_ARGON2_MEMORY_KIB=65536
+# BASESTACK_AUTH_ARGON2_ITERATIONS=3
+# BASESTACK_AUTH_ARGON2_PARALLELISM=1
+# BASESTACK_AUTH_VERIFY_TTL_SECONDS=86400
+# BASESTACK_AUTH_RESET_TTL_SECONDS=1800

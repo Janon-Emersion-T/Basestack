@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -8,7 +9,7 @@ import (
 )
 
 // dev and build share the same checked npm invocation.
-func runFrontend(command string, out io.Writer) error {
+func runFrontend(ctx context.Context, command string, out io.Writer) error {
 	if _, err := exec.LookPath("npm"); err != nil {
 		return fmt.Errorf("npm is required; install Node.js 22 or newer")
 	}
@@ -16,5 +17,5 @@ func runFrontend(command string, out io.Writer) error {
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = out
 	cmd.Stderr = os.Stderr
-	return cmd.Run()
+	return runChild(ctx, cmd)
 }

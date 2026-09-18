@@ -8,50 +8,27 @@ permissions:
 jobs:
   verify:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
           go-version: '1.23.x'
-          cache: false
+          cache: true
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Format, vet and test CLI
-        run: |
-          gofmt -w cmd internal
-          go vet ./...
-          go test -race -cover ./...
-      - name: Build CLI and exercise generated app
-        run: |
-          go build -o "$RUNNER_TEMP/basestack" ./cmd/basestack
-          cd "$RUNNER_TEMP"
-          ./basestack init smoke-app
-          cd smoke-app
-          ../basestack page add about
-          ../basestack page add contact
-          ../basestack add navbar --page about --variant centered
-          ../basestack add hero --page about --variant split
-          ../basestack add features --variant cards
-          ../basestack add pricing --variant simple
-          ../basestack add contact --page contact --variant centered
-          ../basestack add footer --variant columns
-          ../basestack theme set modern
-          ../basestack theme set minimal
-          ../basestack theme set default
-          ../basestack page list
-          ../basestack templates hero
-          ../basestack check
-          npm install --no-fund --no-audit
-          npm test
-          npm run typecheck
-          ../basestack build
-          test -f dist/index.html
+      - name: Check Go formatting
+        run: test -z "$(gofmt -l cmd internal)"
+      - name: Verify CLI, PostgreSQL runtime and generated frontend
+        # The script creates private random credentials, provisions Compose,
+        # runs real PostgreSQL integration tests and stops its containers.
+        run: scripts/verify-generated.sh "$RUNNER_TEMP/basestack-verification"
       - uses: actions/upload-artifact@v4
         with:
           name: basestack-linux-amd64
-          path: ${{ runner.temp }}/basestack
+          path: ${{ runner.temp }}/basestack-verification/basestack
       - uses: actions/upload-artifact@v4
         with:
           name: basestack-demo
-          path: ${{ runner.temp }}/smoke-app/dist
+          path: ${{ runner.temp }}/basestack-verification/smoke-app/dist

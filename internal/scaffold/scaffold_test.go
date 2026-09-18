@@ -59,3 +59,35 @@ func TestCreateAndProtectPaths(t *testing.T) {
 		t.Fatal("symlink damaged")
 	}
 }
+
+func TestGeneratedRuntimeAndNoSecrets(t *testing.T) {
+	old, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(t.TempDir()); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chdir(old) })
+	if err := Create("services-app"); err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range []string{"go.mod", "go.sum", "cmd/server/main.go", "internal/runtime/app/app.go", "internal/runtime/config/config.go", "internal/runtime/database/database.go", "internal/runtime/server/server_test.go", "internal/runtime/migrations/migrations.go", "internal/strictjson/json.go", "compose.yaml", "basestack/services.json", "basestack/migrations/000001_initial.sql", ".env.example"} {
+		if _, err := os.Stat(filepath.Join("services-app", path)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, path := range []string{".env", ".basestack/local.env"} {
+		if _, err := os.Stat(filepath.Join("services-app", path)); !os.IsNotExist(err) {
+			t.Fatalf("generated secret file %s", path)
+		}
+	}
+	ignore, _ := os.ReadFile("services-app/.gitignore")
+	if !bytes.Contains(ignore, []byte(".env")) || !bytes.Contains(ignore, []byte(".basestack/")) {
+		t.Fatal("secret files not ignored")
+	}
+	module, _ := os.ReadFile("services-app/go.mod")
+	if bytes.Contains(module, []byte("github.com/Janon-Emersion-T/Basestack")) {
+		t.Fatal("generated project depends on BaseStack module")
+	}
+}

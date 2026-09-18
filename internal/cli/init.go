@@ -14,6 +14,6 @@ func initCommand(args []string, out io.Writer) error {
 	if err := scaffold.Create(args[0]); err != nil {
 		return err
 	}
-	fmt.Fprintf(out, "Created %s.\n\nNext:\n  cd %s\n  npm install\n  basestack dev\n\nEdit basestack.json to customise pages, content, variants and theme.\n", args[0], args[0])
+	fmt.Fprintf(out, "Created %s.\n\nNext:\n  cd %s\n  npm install\n  basestack services start\n  basestack db migrate\n  basestack api   # separate terminal\n  basestack dev\n\nEdit basestack.json to customise pages, content, variants and theme.\n", args[0], args[0])
 	return nil
 }

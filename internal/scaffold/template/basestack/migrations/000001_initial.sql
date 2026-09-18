@@ -1,0 +1,4 @@
+-- BaseStack 0.3.0 application services baseline.
+-- The migration runner owns basestack_internal.schema_migrations.
+-- No application, authentication or speculative service tables are needed yet.
+-- This intentionally empty migration records the starting point of this project.

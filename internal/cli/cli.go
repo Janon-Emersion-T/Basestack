@@ -2,15 +2,19 @@
 package cli
 
 import (
+	"context"
 	"fmt"
+	"github.com/Janon-Emersion-T/Basestack/internal/runtime/config"
 	"io"
+	"os"
 
 	"github.com/Janon-Emersion-T/Basestack/internal/project"
 )
 
-const Version = "0.2.0"
+const Version = "0.3.1"
 
-func Run(args []string, out io.Writer) error {
+func Run(args []string, out io.Writer) error { return RunContext(context.Background(), args, out) }
+func RunContext(ctx context.Context, args []string, out io.Writer) error {
 	if len(args) == 0 {
 		args = []string{"help"}
 	}
@@ -24,6 +28,19 @@ func Run(args []string, out io.Writer) error {
 		}
 		fmt.Fprintln(out, Version)
 		return nil
+	case "auth":
+		return authCommand(args[1:], out)
+	case "services":
+		return servicesCommand(ctx, args[1:], out)
+	case "migration":
+		return migrationCommand(args[1:], out)
+	case "db":
+		return dbCommand(ctx, args[1:], out)
+	case "api":
+		if len(args) != 1 {
+			return fmt.Errorf("usage: basestack api")
+		}
+		return runRuntime(ctx, "serve", out)
 	case "init":
 		return initCommand(args[1:], out)
 	case "templates":
@@ -43,11 +60,23 @@ func Run(args []string, out io.Writer) error {
 		if _, err := project.Read(); err != nil {
 			return err
 		}
+		if _, err := os.Stat(config.File); err == nil {
+			if _, err := config.Read("."); err != nil {
+				return err
+			}
+		} else if !os.IsNotExist(err) {
+			return err
+		}
 		if args[0] == "check" {
 			fmt.Fprintln(out, "Configuration is valid.")
 			return nil
 		}
-		return runFrontend(args[0], out)
+		if args[0] == "dev" {
+			if err := frontendServiceStatus(out); err != nil {
+				return err
+			}
+		}
+		return runFrontend(ctx, args[0], out)
 	default:
 		return fmt.Errorf("unknown command %q; run basestack help", args[0])
 	}
@@ -69,6 +98,11 @@ Commands:
   check                             Validate basestack.json
   dev                               Start the local Vite server
   build                             Validate and build for production
+  services start|stop|status        Manage local PostgreSQL (Docker Compose)
+  migration new <name>              Create an ordered SQL migration
+  db migrate|status                 Apply migrations or inspect database history
+  api                               Run the generated Go API (separate terminal)
+  auth status                       Show Auth configuration without secrets
   version                           Print CLI version
 
 Run project commands inside a generated project.
